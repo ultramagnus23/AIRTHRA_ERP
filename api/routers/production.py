@@ -87,7 +87,55 @@ async def get_grn(
 
 # ---------------------------------------------------------------------------
 # Inventory lots
+#
+# NOTE (frontend gap-fill, ERP screens phase): P5's GRN endpoint
+# (erp_grn.py::create_grn) records grn/grn_lines and rolls po_items/pos
+# status forward, but nothing in P5 or P6 ever inserts an inventory_lots
+# row - so material received via GRN had no way to become a trackable lot
+# for the inventory/genealogy screens. In a fuller implementation this
+# would likely be automatic (one lot per grn_line on accept), but that's a
+# P5/P6 backend decision this frontend phase must not silently invent by
+# reaching into erp_grn.py. Adding an explicit, minimal creation endpoint
+# here instead (mirrors the qc-records/installations pattern already in
+# this file: locally-scoped Pydantic model, FK-violation -> 400) so the
+# ERP inventory screen has a real, honest write path against live data.
 # ---------------------------------------------------------------------------
+
+class InventoryLotCreate(BaseModel):
+    grn_line_id: str | None = None
+    material_id: str
+    qty_on_hand: float = Field(ge=0)
+    unit: str
+    location: str | None = None
+    heat_no: str | None = None
+    mtc_url: str | None = None
+    sha256: str | None = None
+
+
+@router.post("/inventory-lots", status_code=status.HTTP_201_CREATED)
+async def create_inventory_lot(
+    body: InventoryLotCreate,
+    user: CurrentUser = Depends(get_current_user),
+    conn: AsyncConnection = Depends(db_session),
+):
+    lot_id = str(uuid.uuid4())
+    try:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO inventory_lots (lot_id, grn_line_id, material_id, qty_on_hand, unit, location, heat_no, mtc_url, sha256)
+                    VALUES (:lot_id, :grn_line_id, :material_id, :qty_on_hand, :unit, :location, :heat_no, :mtc_url, :sha256)
+                    RETURNING lot_id, grn_line_id, material_id, qty_on_hand, unit, location, heat_no, mtc_url, sha256
+                    """
+                ),
+                {"lot_id": lot_id, **body.model_dump()},
+            )
+        ).mappings().first()
+    except Exception as exc:  # FK violation on a bad grn_line_id/material_id
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return dict(row)
+
 
 @router.get("/inventory-lots")
 async def list_inventory_lots(
@@ -213,10 +261,71 @@ async def create_issue_line(
 
 
 # ---------------------------------------------------------------------------
-# Fabrication jobs: status transitions
+# Fabrication jobs: list/create + status transitions
+#
+# NOTE (frontend gap-fill, ERP screens phase): the P6 spec/docstring above
+# only mentions status transitions for fabrication_jobs; no list/create
+# endpoint existed yet, which the job-board screen (app/(erp)/jobs) needs.
+# Added here in the same minimal, locally-scoped-Pydantic-model style as the
+# rest of this file rather than touching api/schemas.py.
 # ---------------------------------------------------------------------------
 
 _JOB_STATUSES = ("planned", "in_progress", "on_hold", "completed", "cancelled")
+
+
+class FabricationJobCreate(BaseModel):
+    project_id: str
+    bom_id: str | None = None
+    unit_serial: str | None = None
+
+
+@router.get("/fabrication-jobs")
+async def list_fabrication_jobs(
+    project_id: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    user: CurrentUser = Depends(get_current_user),
+    conn: AsyncConnection = Depends(db_session),
+):
+    rows = (
+        await conn.execute(
+            text(
+                """
+                SELECT id, project_id, bom_id, unit_serial, status, started, finished
+                FROM fabrication_jobs
+                WHERE (CAST(:project_id AS uuid) IS NULL OR project_id = :project_id)
+                  AND (CAST(:status AS text) IS NULL OR status = :status)
+                ORDER BY started DESC NULLS LAST, id
+                """
+            ),
+            {"project_id": project_id, "status": status_filter},
+        )
+    ).mappings().all()
+    return {"jobs": [dict(r) for r in rows]}
+
+
+@router.post("/fabrication-jobs", status_code=status.HTTP_201_CREATED)
+async def create_fabrication_job(
+    body: FabricationJobCreate,
+    user: CurrentUser = Depends(get_current_user),
+    conn: AsyncConnection = Depends(db_session),
+):
+    job_id = str(uuid.uuid4())
+    try:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO fabrication_jobs (id, project_id, bom_id, unit_serial)
+                    VALUES (:id, :project_id, :bom_id, :unit_serial)
+                    RETURNING id, project_id, bom_id, unit_serial, status, started, finished
+                    """
+                ),
+                {"id": job_id, "project_id": body.project_id, "bom_id": body.bom_id, "unit_serial": body.unit_serial},
+            )
+        ).mappings().first()
+    except Exception as exc:  # FK violation on a bad project_id/bom_id/unit_serial
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return dict(row)
 _JOB_TRANSITIONS = {
     "planned": {"in_progress", "cancelled"},
     "in_progress": {"on_hold", "completed", "cancelled"},
@@ -280,6 +389,60 @@ _SERIAL_ORDER = ("fabrication", "qc", "dispatched", "installed")
 
 class UnitSerialStatusUpdate(BaseModel):
     status: Literal["fabrication", "qc", "dispatched", "installed"]
+
+
+class UnitSerialCreate(BaseModel):
+    serial: str
+    model: str | None = None
+    project_id: str | None = None
+
+
+@router.get("/unit-serials")
+async def list_unit_serials(
+    project_id: str | None = Query(default=None),
+    user: CurrentUser = Depends(get_current_user),
+    conn: AsyncConnection = Depends(db_session),
+):
+    """Gap-fill (see fabrication_jobs list above for rationale): needed by
+    the ERP QC-entry and job-board screens to populate unit_serial pickers."""
+    rows = (
+        await conn.execute(
+            text(
+                """
+                SELECT serial, model, project_id, status
+                FROM unit_serials
+                WHERE CAST(:project_id AS uuid) IS NULL OR project_id = :project_id
+                ORDER BY serial
+                """
+            ),
+            {"project_id": project_id},
+        )
+    ).mappings().all()
+    return {"unit_serials": [dict(r) for r in rows]}
+
+
+@router.post("/unit-serials", status_code=status.HTTP_201_CREATED)
+async def create_unit_serial(
+    body: UnitSerialCreate,
+    user: CurrentUser = Depends(get_current_user),
+    conn: AsyncConnection = Depends(db_session),
+):
+    try:
+        row = (
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO unit_serials (serial, model, project_id)
+                    VALUES (:serial, :model, :project_id)
+                    RETURNING serial, model, project_id, status
+                    """
+                ),
+                body.model_dump(),
+            )
+        ).mappings().first()
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return dict(row)
 
 
 @router.patch("/unit-serials/{serial}/status")

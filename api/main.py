@@ -11,6 +11,7 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 # aiomqtt (via paho-mqtt) registers socket readers/writers with
 # loop.add_reader/add_writer, which asyncio's default Windows event loop
@@ -24,12 +25,14 @@ if sys.platform == "win32":
 
 from . import mqtt_bridge
 from .routers import (
+    admin_alarms,
     admin_billing,
     admin_fleet,
     admin_logistics,
     admin_metrics,
     admin_mrv,
     admin_risk,
+    alarms_list,
     auth,
     erp_boms,
     erp_drawings,
@@ -69,8 +72,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Airthra P2 API", lifespan=lifespan)
 
+# Dev-only permissive CORS so the Next.js frontend (localhost:3000, a
+# different origin) can call this API and open the /ws/{plant_id}
+# WebSocket during local development. Tighten to an explicit allow-list
+# (NEXT_PUBLIC_API_BASE's origin) before this is ever deployed anywhere
+# real - wide open CORS is a dev convenience only.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(auth.router)
 app.include_router(plant.router)
+app.include_router(alarms_list.router)
 app.include_router(ws.router)
 
 # P5 - ERP procurement + engineering
@@ -98,6 +115,7 @@ app.include_router(admin_logistics.router)
 app.include_router(admin_risk.router)
 app.include_router(admin_billing.router)
 app.include_router(admin_mrv.router)
+app.include_router(admin_alarms.router)
 
 
 @app.get("/health")
