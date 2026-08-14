@@ -1,0 +1,21 @@
+# Auto-provisioned Grafana datasource for the P0 stack.
+# Dashboards themselves are a later-phase (P1+) concern; this just wires the
+# connection so `docker compose up` gives a working Grafana -> Postgres/
+# TimescaleDB link from day one.
+apiVersion: 1
+
+datasources:
+  - name: Airthra Postgres
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: $__env{POSTGRES_DB}
+    user: $__env{POSTGRES_USER}
+    secureJsonData:
+      password: $__env{POSTGRES_PASSWORD}
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: true
+    isDefault: true
+    editable: true

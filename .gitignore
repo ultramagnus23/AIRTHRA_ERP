@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+docker/mosquitto/certs/
+docker/mosquitto/passwd
+*.log
+.DS_Store
+
+# --- P1: edge daemon runtime state (manifest cache, SQLite buffer,
+# heartbeat/stats files) - regenerated on every run, never committed.
+edge/data/
+edge/cache/
+tests/_p1_gate_logs/

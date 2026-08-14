@@ -1,0 +1,26 @@
+# P6: contact point for the KOH-days-remaining alert pattern.
+#
+# Points at POST /admin/logistics/task, which is owned/being-built by the
+# concurrent P7 phase (api/routers/admin_*.py). Until that endpoint exists
+# and the API is reachable from inside the Grafana container, this webhook
+# will fail to deliver - that is expected and documented in
+# tests/p6_grafana_gate.py (it verifies the rule/contact point/policy are
+# correctly *provisioned* via Grafana's HTTP API, not that the webhook
+# round-trip succeeds end-to-end).
+#
+# host.docker.internal resolves to the Docker host from inside the
+# `grafana` container on Docker Desktop for Windows (this stack's target
+# platform per the environment notes), reaching the API which runs
+# directly on the host (not yet containerized) on port 8000.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: airthra-logistics-webhook
+    receivers:
+      - uid: koh_days_webhook_v1
+        type: webhook
+        settings:
+          url: http://host.docker.internal:8000/admin/logistics/task
+          httpMethod: POST
+        disableResolveMessage: false

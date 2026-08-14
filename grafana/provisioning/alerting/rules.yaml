@@ -1,0 +1,73 @@
+# P6: the one required alert rule pattern - KOH-days-remaining < 2 fires
+# the airthra-logistics-webhook contact point (see contactpoints.yaml).
+#
+# datasourceUid PA23F4748EEBB6647 is the uid Grafana assigned to the P0
+# "Airthra Postgres" datasource (grafana/provisioning/datasources/postgres.yml,
+# which does not pin an explicit uid) - confirmed live via
+# `GET /api/datasources` against the running stack. That datasource file is
+# P0-owned and intentionally not modified here; if it is ever recreated
+# with a different uid, this rule's datasourceUid will need updating to
+# match (documented risk, not automatically resolved).
+#
+# The underlying query expects a `kpis` row with kpi_name =
+# 'koh_days_remaining' per plant. No producer of that KPI exists yet as of
+# P6 (that's a P1/P3 concern) - until one lands, this rule will sit in
+# "NoData" state, which is expected and does not indicate a provisioning
+# failure. See tests/p6_grafana_gate.py for what is and is not verified.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: airthra-logistics-alerts
+    folder: Airthra Logistics
+    interval: 5m
+    rules:
+      - uid: koh_days_remaining_lt_2
+        title: KOH days remaining critical
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: PA23F4748EEBB6647
+            model:
+              refId: A
+              format: time_series
+              rawSql: >-
+                SELECT ts AS "time", plant_id, value
+                FROM kpis
+                WHERE kpi_name = 'koh_days_remaining'
+                  AND ts > now() - interval '15 minutes'
+                ORDER BY ts
+              rawQuery: true
+          - refId: B
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: "__expr__"
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: "__expr__"
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [2]
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "KOH days remaining below 2 for plant {{ $labels.plant_id }}"

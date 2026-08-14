@@ -1,0 +1,56 @@
+{
+  "id": null,
+  "uid": "p6-inventory-value",
+  "title": "Inventory Value",
+  "tags": ["airthra", "p6", "inventory"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5m",
+  "time": { "from": "now-30d", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total inventory value on hand",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "fieldConfig": { "defaults": { "unit": "currencyINR" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT sum(l.qty_on_hand * COALESCE(m.rate_per_kg, 0)) AS value FROM inventory_lots l JOIN materials m ON m.id = l.material_id"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "piechart",
+      "title": "Inventory value by material",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 6 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT m.name AS material, sum(l.qty_on_hand * COALESCE(m.rate_per_kg, 0)) AS value FROM inventory_lots l JOIN materials m ON m.id = l.material_id GROUP BY m.name ORDER BY value DESC"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Lots on hand",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 18 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT l.lot_id, m.name AS material, l.qty_on_hand, l.unit, l.location, l.heat_no, (l.qty_on_hand * COALESCE(m.rate_per_kg, 0)) AS value FROM inventory_lots l JOIN materials m ON m.id = l.material_id WHERE l.qty_on_hand > 0 ORDER BY value DESC"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "id": null,
+  "uid": "p6-machine-overview",
+  "title": "Machine Overview (per plant)",
+  "tags": ["airthra", "p6", "machine"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "plant_id",
+        "type": "query",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+        "query": "SELECT plant_id FROM plants ORDER BY plant_id",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Live readings",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT ts AS \"time\", sensor_id, value FROM readings WHERE plant_id = '$plant_id' AND $__timeFilter(ts) ORDER BY ts",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "KPIs",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT ts AS \"time\", kpi_name, value FROM kpis WHERE plant_id = '$plant_id' AND $__timeFilter(ts) ORDER BY ts",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Active alarms",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT raised_at, severity, state, diagnosis, suggested_part FROM alarms WHERE plant_id = '$plant_id' AND state IN ('raised','acked','escalated') ORDER BY raised_at DESC",
+          "format": "table"
+        }
+      ]
+    }
+  ]
+}

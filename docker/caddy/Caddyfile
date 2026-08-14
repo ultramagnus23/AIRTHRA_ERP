@@ -1,0 +1,23 @@
+# Airthra local dev reverse proxy.
+# api and frontend are P1+ deliverables; this just wires the routes so that
+# `docker compose up` gives a single entrypoint from day one.
+
+localhost {
+	# Frontend (P1+, e.g. Vite/Next dev server or static build) on :3000
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	# Local dev: Caddy's internal CA issues a cert for `localhost` automatically.
+	tls internal
+}
+
+# Plain-HTTP health check convenience, useful before api/frontend exist.
+:8080 {
+	respond "airthra caddy ok" 200
+}

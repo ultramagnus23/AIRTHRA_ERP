@@ -1,0 +1,59 @@
+{
+  "id": null,
+  "uid": "p6-live-trip-geomap",
+  "title": "Live Trip Geomap",
+  "tags": ["airthra", "p6", "logistics"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "geomap",
+      "title": "Trips in transit - latest position",
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT DISTINCT ON (tp.trip_id) tp.trip_id, t.vehicle_no, t.driver, t.purpose, t.dest_plant_id, tp.ts, tp.lat, tp.lon, tp.speed FROM trip_pings tp JOIN trips t ON t.id = tp.trip_id WHERE t.status = 'in_transit' ORDER BY tp.trip_id, tp.ts DESC"
+        }
+      ],
+      "options": {
+        "view": { "id": "zero", "lat": 15.38, "lon": 73.96, "zoom": 6 },
+        "basemap": { "type": "osm-standard", "name": "Basemap" },
+        "layers": [
+          {
+            "type": "markers",
+            "name": "Trip positions",
+            "location": { "mode": "coords", "latitude": "lat", "longitude": "lon" },
+            "config": {
+              "style": {
+                "size": { "fixed": 6 },
+                "color": { "fixed": "#3274d9" },
+                "symbol": { "fixed": "img/icons/marker/circle.svg" }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Trip pings (raw, last hour)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT tp.ts, t.vehicle_no, tp.lat, tp.lon, tp.speed FROM trip_pings tp JOIN trips t ON t.id = tp.trip_id WHERE tp.ts > now() - interval '1 hour' ORDER BY tp.ts DESC"
+        }
+      ]
+    }
+  ]
+}

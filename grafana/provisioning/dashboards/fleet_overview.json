@@ -1,0 +1,71 @@
+{
+  "id": null,
+  "uid": "p6-fleet-overview",
+  "title": "Fleet Overview",
+  "tags": ["airthra", "p6", "fleet"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Plants",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        { "refId": "A", "rawSql": "SELECT count(*) AS value FROM plants", "format": "table" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Critical alarms (raised, last 24h)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT count(*) AS value FROM alarms WHERE severity = 'critical' AND state IN ('raised','escalated') AND raised_at > now() - interval '24 hours'",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Trips in transit",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        { "refId": "A", "rawSql": "SELECT count(*) AS value FROM trips WHERE status = 'in_transit'", "format": "table" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Units installed",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        { "refId": "A", "rawSql": "SELECT count(*) AS value FROM unit_serials WHERE status = 'installed'", "format": "table" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Per-plant alarm counts (24h)",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 4 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT p.plant_id, p.name, count(a.alarm_id) AS alarm_count FROM plants p LEFT JOIN alarms a ON a.plant_id = p.plant_id AND a.raised_at > now() - interval '24 hours' GROUP BY p.plant_id, p.name ORDER BY alarm_count DESC",
+          "format": "table"
+        }
+      ]
+    }
+  ]
+}

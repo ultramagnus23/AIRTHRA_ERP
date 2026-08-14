@@ -1,0 +1,14 @@
+# P6: routes the KOH-days-remaining alert (severity=critical label) to the
+# logistics webhook contact point. See contactpoints.yaml for the target
+# URL and its P7-dependency limitation.
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: airthra-logistics-webhook
+    group_by: ["alertname", "plant_id"]
+    routes:
+      - receiver: airthra-logistics-webhook
+        object_matchers:
+          - ["severity", "=", "critical"]
+        continue: false

@@ -1,0 +1,15 @@
+# P6: dashboard provider config. P0 did not add one (only a .gitkeep
+# placeholder existed in this folder) - this is the first.
+apiVersion: 1
+
+providers:
+  - name: airthra-dashboards
+    orgId: 1
+    folder: Airthra
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

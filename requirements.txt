@@ -1,0 +1,37 @@
+fastapi==0.115.6
+sqlalchemy==2.0.36
+alembic==1.14.0
+psycopg[binary]==3.2.3
+asyncpg==0.30.0
+python-dotenv==1.0.1
+pydantic==2.10.3
+
+# --- P1: edge daemon / ingest service ---
+aiomqtt==2.5.1
+aiosqlite==0.22.1
+pymodbus==3.15.0
+
+# --- P2: API + live UI ---
+pyjwt==2.10.1
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+uvicorn[standard]==0.34.0
+httpx==0.28.1
+websockets==14.1
+greenlet==3.1.1
+
+# --- P4: hardening (archive worker / restore drill / Pi provisioning / load test) ---
+pyarrow==25.0.1
+boto3==1.43.71
+cryptography==50.0.0
+# Real OTS calendar submission uses the low-level `opentimestamps` package
+# directly (see workers/archive_worker.py docstring for why the higher-
+# level `otsclient`/`ots` CLI is unusable on this Windows dev box). Pulled
+# in transitively by opentimestamps-client below; listed explicitly since
+# archive_worker.py imports it directly.
+opentimestamps==0.4.5
+opentimestamps-client==0.7.2
+
+# --- P5: ERP procurement + engineering (PO PDFs, MinIO object storage via
+# boto3, already listed above under P4) ---
+reportlab==5.0.0

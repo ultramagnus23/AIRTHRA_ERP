@@ -1,0 +1,55 @@
+{
+  "id": null,
+  "uid": "p6-jobs-by-status",
+  "title": "Fabrication Jobs by Status",
+  "tags": ["airthra", "p6", "production"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-90d", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "piechart",
+      "title": "Jobs by status",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT status, count(*) AS count FROM fabrication_jobs GROUP BY status ORDER BY status"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "piechart",
+      "title": "Unit serials by status",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT status, count(*) AS count FROM unit_serials GROUP BY status ORDER BY status"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "In-progress / on-hold jobs",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT fj.id, pr.name AS project, fj.unit_serial, fj.status, fj.started FROM fabrication_jobs fj JOIN projects pr ON pr.id = fj.project_id WHERE fj.status IN ('in_progress','on_hold') ORDER BY fj.started"
+        }
+      ]
+    }
+  ]
+}

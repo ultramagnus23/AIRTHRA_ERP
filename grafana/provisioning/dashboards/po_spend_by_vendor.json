@@ -1,0 +1,41 @@
+{
+  "id": null,
+  "uid": "p6-po-spend-by-vendor",
+  "title": "PO Spend by Vendor",
+  "tags": ["airthra", "p6", "procurement"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5m",
+  "time": { "from": "now-1y", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "barchart",
+      "title": "Total PO value by vendor (incl. GST)",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT v.name AS vendor, sum(pi.qty * pi.rate * (1 + pi.gst_rate / 100.0)) AS total_value FROM pos p JOIN vendors v ON v.id = p.vendor_id JOIN po_items pi ON pi.po_id = p.id WHERE p.po_date BETWEEN $__timeFrom() AND $__timeTo() GROUP BY v.name ORDER BY total_value DESC"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "PO count / spend detail by vendor",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "PA23F4748EEBB6647" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT v.name AS vendor, count(DISTINCT p.id) AS po_count, sum(pi.qty * pi.rate) AS taxable_value, sum(pi.qty * pi.rate * pi.gst_rate / 100.0) AS gst_value FROM pos p JOIN vendors v ON v.id = p.vendor_id JOIN po_items pi ON pi.po_id = p.id GROUP BY v.name ORDER BY taxable_value DESC"
+        }
+      ]
+    }
+  ]
+}
