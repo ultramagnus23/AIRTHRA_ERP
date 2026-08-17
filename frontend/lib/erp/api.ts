@@ -84,6 +84,8 @@ export const updateMaterial = (id: string, body: Partial<Material>) => patch<Mat
 export const listHardwareComponents = () => get<HardwareComponent[]>("/erp/hardware-components");
 export const createHardwareComponent = (body: Partial<HardwareComponent>) =>
   post<HardwareComponent>("/erp/hardware-components", body);
+export const updateHardwareComponent = (id: string, body: Partial<HardwareComponent>) =>
+  patch<HardwareComponent>(`/erp/hardware-components/${id}`, body);
 export const deleteHardwareComponent = (id: string) => del(`/erp/hardware-components/${id}`);
 
 // --- Quotations ------------------------------------------------------------

@@ -1,18 +1,40 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createHardwareComponent, deleteHardwareComponent, listHardwareComponents, ErpApiError } from "@/lib/erp/api";
+import {
+  createHardwareComponent,
+  deleteHardwareComponent,
+  listHardwareComponents,
+  updateHardwareComponent,
+  ErpApiError,
+} from "@/lib/erp/api";
 import type { HardwareComponent } from "@/lib/erp/types";
 
-const emptyForm = { category: "", sort_order: "", item: "", spec_function: "" };
+const emptyForm = { category: "", sort_order: "", item: "", spec_function: "", tag_id: "", tier: "", segment: "", cost_inr: "" };
+type FormState = typeof emptyForm;
+
+function toEditForm(c: HardwareComponent): FormState {
+  return {
+    category: c.category,
+    sort_order: String(c.sort_order),
+    item: c.item,
+    spec_function: c.spec_function ?? "",
+    tag_id: c.tag_id ?? "",
+    tier: c.tier != null ? String(c.tier) : "",
+    segment: c.segment ?? "",
+    cost_inr: c.cost_inr != null ? String(c.cost_inr) : "",
+  };
+}
 
 export default function HardwareComponentsPage() {
   const [components, setComponents] = useState<HardwareComponent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<FormState>(emptyForm);
 
   function load() {
     setLoading(true);
@@ -57,12 +79,44 @@ export default function HardwareComponentsPage() {
         sort_order: form.sort_order ? Number(form.sort_order) : nextSort,
         item: form.item,
         spec_function: form.spec_function || null,
+        tag_id: form.tag_id || null,
+        tier: form.tier ? Number(form.tier) : null,
+        segment: form.segment || null,
+        cost_inr: form.cost_inr ? Number(form.cost_inr) : null,
       });
       setForm(emptyForm);
       setShowForm(false);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create component");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startEdit(c: HardwareComponent) {
+    setEditId(c.id);
+    setEditForm(toEditForm(c));
+  }
+
+  async function saveEdit(id: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateHardwareComponent(id, {
+        category: editForm.category,
+        sort_order: editForm.sort_order ? Number(editForm.sort_order) : undefined,
+        item: editForm.item,
+        spec_function: editForm.spec_function || null,
+        tag_id: editForm.tag_id || null,
+        tier: editForm.tier ? Number(editForm.tier) : null,
+        segment: editForm.segment || null,
+        cost_inr: editForm.cost_inr ? Number(editForm.cost_inr) : null,
+      });
+      setEditId(null);
+      load();
+    } catch (e) {
+      setError(e instanceof ErpApiError ? e.message : "failed to update component");
     } finally {
       setSaving(false);
     }
@@ -105,7 +159,11 @@ export default function HardwareComponentsPage() {
         >
           <Field label="Category *" value={form.category} onChange={(v) => setForm({ ...form, category: v })} required />
           <Field label="Item *" value={form.item} onChange={(v) => setForm({ ...form, item: v })} required />
-          <Field label="Spec / function" value={form.spec_function} onChange={(v) => setForm({ ...form, spec_function: v })} className="sm:col-span-2" />
+          <Field label="Tag ID" value={form.tag_id} onChange={(v) => setForm({ ...form, tag_id: v })} />
+          <Field label="Segment" value={form.segment} onChange={(v) => setForm({ ...form, segment: v })} />
+          <Field label="Spec / diagnostic purpose" value={form.spec_function} onChange={(v) => setForm({ ...form, spec_function: v })} className="sm:col-span-2" />
+          <Field label="Tier (1/2/3)" value={form.tier} onChange={(v) => setForm({ ...form, tier: v })} type="number" />
+          <Field label="Cost (INR)" value={form.cost_inr} onChange={(v) => setForm({ ...form, cost_inr: v })} type="number" />
           <Field label="Sort order (optional)" value={form.sort_order} onChange={(v) => setForm({ ...form, sort_order: v })} type="number" />
           <div className="sm:col-span-4">
             <button
@@ -154,25 +212,56 @@ export default function HardwareComponentsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((c) => (
-                      <tr key={c.id} className="border-t border-hair hover:bg-midnight">
-                        <td className="px-3 py-2 font-mono font-medium text-copper">{c.tag_id || "-"}</td>
-                        <td className="px-3 py-2 font-mono font-medium text-fg">{c.item}</td>
-                        <td className="px-3 py-2 font-mono text-mist">{c.segment || "-"}</td>
-                        <td className="px-3 py-2">
-                          <TierBadge tier={c.tier} />
-                        </td>
-                        <td className="max-w-xl px-3 py-2 text-mist">{c.spec_function || "-"}</td>
-                        <td className="px-3 py-2 font-mono text-fg">
-                          {c.cost_inr != null ? `₹${Number(c.cost_inr).toLocaleString("en-IN")}` : "-"}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <button onClick={() => handleDelete(c.id)} className="text-rust hover:underline">
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {items.map((c) =>
+                      editId === c.id ? (
+                        <tr key={c.id} className="border-t border-hair bg-midnight">
+                          <td className="px-3 py-2">
+                            <input className="w-20 rounded-lg border border-line bg-transparent px-2 py-1 font-mono text-fg focus:border-copper focus:outline-none" value={editForm.tag_id} onChange={(e) => setEditForm({ ...editForm, tag_id: e.target.value })} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input className="w-full min-w-40 rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.item} onChange={(e) => setEditForm({ ...editForm, item: e.target.value })} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input className="w-28 rounded-lg border border-line bg-transparent px-2 py-1 font-mono text-fg focus:border-copper focus:outline-none" value={editForm.segment} onChange={(e) => setEditForm({ ...editForm, segment: e.target.value })} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select className="rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.tier} onChange={(e) => setEditForm({ ...editForm, tier: e.target.value })}>
+                              <option value="" className="bg-panel">-</option>
+                              <option value="1" className="bg-panel">Tier 1</option>
+                              <option value="2" className="bg-panel">Tier 2</option>
+                              <option value="3" className="bg-panel">Tier 3</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input className="w-full min-w-56 rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.spec_function} onChange={(e) => setEditForm({ ...editForm, spec_function: e.target.value })} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input className="w-24 rounded-lg border border-line bg-transparent px-2 py-1 font-mono text-fg focus:border-copper focus:outline-none" value={editForm.cost_inr} onChange={(e) => setEditForm({ ...editForm, cost_inr: e.target.value })} />
+                          </td>
+                          <td className="space-x-2 px-3 py-2 whitespace-nowrap text-right">
+                            <button onClick={() => saveEdit(c.id)} disabled={saving} className="text-copper hover:underline">Save</button>
+                            <button onClick={() => setEditId(null)} className="text-mist hover:underline">Cancel</button>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={c.id} className="border-t border-hair hover:bg-midnight">
+                          <td className="px-3 py-2 font-mono font-medium text-copper">{c.tag_id || "-"}</td>
+                          <td className="px-3 py-2 font-mono font-medium text-fg">{c.item}</td>
+                          <td className="px-3 py-2 font-mono text-mist">{c.segment || "-"}</td>
+                          <td className="px-3 py-2">
+                            <TierBadge tier={c.tier} />
+                          </td>
+                          <td className="max-w-xl px-3 py-2 text-mist">{c.spec_function || "-"}</td>
+                          <td className="px-3 py-2 font-mono text-fg">
+                            {c.cost_inr != null ? `₹${Number(c.cost_inr).toLocaleString("en-IN")}` : "-"}
+                          </td>
+                          <td className="space-x-2 px-3 py-2 text-right whitespace-nowrap">
+                            <button onClick={() => startEdit(c)} className="text-copper hover:underline">Edit</button>
+                            <button onClick={() => handleDelete(c.id)} className="text-rust hover:underline">Remove</button>
+                          </td>
+                        </tr>
+                      ),
+                    )}
                   </tbody>
                 </table>
               </div>
