@@ -63,7 +63,28 @@ class KpiOut(BaseModel):
 
 
 class EventCreate(BaseModel):
-    kind: Literal["maintenance", "lab_sample", "note", "alarm_ack"]
+    # Mirrors the operator_events_kind_check constraint (migration
+    # 0006_ml_ground_truth). The specific kinds below exist because these
+    # rows are ML ground truth: a model cannot learn that a step change in
+    # solvent chemistry was a KOH top-up rather than an anomaly unless the
+    # human action is a *label*, not prose in a note field. The original
+    # four generic kinds are retained for historical rows.
+    kind: Literal[
+        "maintenance",
+        "lab_sample",
+        "note",
+        "alarm_ack",
+        "koh_added",
+        "tote_changeout",
+        "phe_cleaned",
+        "stator_changed",
+        "demister_cleaned",
+        "fuel_change",
+        "boiler_trip",
+        "emergency_trip",
+        "sensor_calibration",
+        "purge_cycle",
+    ]
     payload: dict[str, Any] = Field(default_factory=dict)
 
 

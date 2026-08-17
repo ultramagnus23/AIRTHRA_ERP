@@ -4,7 +4,16 @@ Date: 2026-08-17
 
 The critique is correct in substance — these are the right six landmines, and it was worth raising. Point-by-point below, with file/line evidence for anything claimed as already-handled, and no claim of "done" where it isn't.
 
-**Scorecard:** 2 of 6 were already built (one exceeding the spec), 2 were built but not to a standard that survives the reviewer's objection, 1 was a genuine gap now fixed, 1 remains open.
+**Scorecard after this round of work:**
+
+| # | Point | Status |
+|---|---|---|
+| 1 | No-clock trap | **Was a real gap — fixed.** Hardware (DS3231) still to buy. |
+| 2 | Store-and-forward | Already built, exceeds spec. Long-outage behaviour untested. |
+| 3 | `quality_flag` | Mostly already solved — *my first assessment of this was wrong, corrected below*. The one real gap (calibration/purge) is fixed. |
+| 4 | Event logging | **Was too weak — fixed.** Ten one-tap structured actions. |
+| 5 | Zero-trust access | **Open.** No port-forwarding hazard exists; provisioning is a placeholder. Tailscale recommended. |
+| 6 | Blockchain cron | Built, exceeds spec on integrity. **No scheduler** — open. |
 
 One architectural note up front: the review assumes an InfluxDB 1.8 + Telegraf + Node-RED stack. This platform is TimescaleDB (Postgres) + MQTT + FastAPI. Every *principle* below applies identically; the specific tooling differs, and where it does the rationale is given rather than glossed.
 
@@ -45,7 +54,31 @@ Difference from the reviewer's design: buffering is SQLite rather than a local I
 
 ---
 
-## 3. `quality_flag` — **built, but the reviewer's objection stands**
+## 3. `quality_flag` — **CORRECTION: mostly already solved. One real gap, now fixed.**
+
+> **This section originally said the platform collapsed hardware-fault and out-of-range into a single `bad` flag. That was wrong, and the correction matters in the reviewer's favour on one point and ours on another.** I read the vocabulary from migration 0001 without noticing that `0003_quality_flag_fidelity` had already replaced it. Attempting the schema change is what surfaced the error — the migration failed against live data, which is the system working as intended.
+
+The actual live vocabulary, since migration 0003, is `('good', 'comm_error', 'out_of_range', 'frozen', 'imputed')`. Mapping to the review's proposal:
+
+| Proposed | Meaning | Platform |
+|---|---|---|
+| 0 | Good | `good` ✅ |
+| 1 | Hardware fault | `comm_error` ✅ already separate |
+| 2 | Out-of-physical-range | `out_of_range` ✅ already separate |
+| 3 | Calibration / purge | **was genuinely missing** |
+| — | Stuck/frozen value | `frozen` — a real failure mode the review did not list |
+| — | ML-imputed | `imputed` — never written outside the ML feature path |
+
+So flags 1 and 2 were already distinguishable, and the platform additionally tracks `frozen`, which the alarm engine has a dedicated detector for.
+
+**The genuine gap was flag 3, and it is now fixed** (migration `0006_ml_ground_truth`): `calibration` and `purge` added. Previously, readings taken during a purge or a sensor calibration were either wrongly marked `good` or wrongly marked as a fault — raising false alarms and, worse, feeding the model maintenance windows labelled as anomalies.
+
+Text values rather than integers 0–3 by deliberate choice: a stray `2` in a log line is unreadable; `out_of_range` is self-documenting everywhere it appears. The ML pipeline filters `quality_flag = 'good'` either way.
+
+<details>
+<summary>Original text of this section (superseded)</summary>
+
+## 3. `quality_flag` — built, but the reviewer's objection stands</details>
 
 The rule itself is enforced platform-wide and was a founding constraint: raw readings are immutable, bad data is flagged rather than dropped or nulled, and `imputed` is never written outside the ML feature path. The alarm engine has a dedicated frozen-sensor detector keyed on flag persistence.
 
@@ -60,11 +93,26 @@ The rule itself is enforced platform-wide and was a founding constraint: raw rea
 
 Two real losses. First, `bad` cannot distinguish "the wire fell off" from "the reading is implausible" — different work orders, same flag. Second, and more serious, there is **no calibration/purge state at all**: during a purge, readings are either wrongly marked `good` or wrongly marked `bad`, when the truth is "intentionally invalid, ignore, nothing is broken". That will generate false alarms and poison training data.
 
-**Recommendation:** extend the CHECK constraint to add `sensor_fault`, `out_of_range`, and `calibration`, keeping `bad` as a deprecated alias during migration. Text over integers deliberately — a stray `2` in a config file is unreadable, `out_of_range` is self-documenting in queries and logs. Not yet done: it is a schema migration touching the alarm engine and the ML feature path, and needs sequencing.
+**Recommendation:** extend the CHECK constraint to add `sensor_fault`, `out_of_range`, and `calibration`, keeping `bad` as a deprecated alias during migration.
+
+*(End of superseded section — see the correction above for what was actually true and what shipped.)*
 
 ---
 
-## 4. Event logging — **built, but too weak to serve as ML ground truth**
+## 4. Event logging — **was too weak to be ground truth. Now fixed.**
+
+> **Status: shipped.** [frontend/components/QuickEventBar.tsx](frontend/components/QuickEventBar.tsx) + migration `0006_ml_ground_truth`.
+
+Ten one-tap buttons, each writing a discrete, queryable event kind keyed to the FEED register's equipment tags — `Added KOH` (LE-03), `Tote changeout` (LE-02), `Cleaned PHE` (PHE-101), `Changed stator` (P-101), `Cleaned demister` (T-101), `Boiler fuel change`, `Sensor calibration`, `Purge cycle`, plus `Boiler trip` and `Emergency trip` rendered in rust as safety-critical.
+
+`Added KOH` prompts inline for litres before filing, because the quantity is itself a model feature; Enter submits, Escape cancels. Everything else posts on a single tap. Confirmation is transient and announced via `aria-live` so it reaches a screen reader without stealing focus from the button just pressed. The general free-text form is retained below, demoted to "Something else".
+
+Verified end-to-end: tapping the button in the browser wrote `kind='koh_added'`, `payload={"tag":"LE-03","action":"Added KOH","quantity":42,"unit":"L"}` to Postgres. An unrecognised kind is rejected `422` at the API and by the DB CHECK constraint.
+
+<details>
+<summary>Original assessment (superseded — this is what was wrong)</summary>
+
+## 4. Event logging — built, but too weak to serve as ML ground truth
 
 An events form exists (`frontend/components/EventForm.tsx`, `/[plant_id]/events`) writing timestamped rows. But its shape is a **generic dropdown of four kinds** (`maintenance`, `lab_sample`, `note`, `alarm_ack`) plus a free-text note and optional quantity.
 
@@ -74,7 +122,8 @@ The reviewer's objection is correct and this is the gap I would rank second afte
 
 each writing a typed event kind with structured fields (quantity + unit for KOH), not prose. The operator interaction must be a single tap on a control-room screen, because anything slower simply will not be recorded during an actual incident — which is precisely when the label matters most.
 
-**Status: open.** Concrete, low-risk, no hardware dependency.
+*(End of superseded section — this is now shipped, see above.)*
+</details>
 
 ---
 

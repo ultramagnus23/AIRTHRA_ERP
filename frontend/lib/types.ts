@@ -102,7 +102,57 @@ export interface KpisResponse {
   kpis: KpiPoint[];
 }
 
-export type EventKind = "maintenance" | "lab_sample" | "note" | "alarm_ack";
+export type EventKind =
+  | "maintenance"
+  | "lab_sample"
+  | "note"
+  | "alarm_ack"
+  | "koh_added"
+  | "tote_changeout"
+  | "phe_cleaned"
+  | "stator_changed"
+  | "demister_cleaned"
+  | "fuel_change"
+  | "boiler_trip"
+  | "emergency_trip"
+  | "sensor_calibration"
+  | "purge_cycle";
+
+/** One-tap operator actions, in the order they appear on the events page.
+ *
+ * These rows are ML ground truth, which drives every design choice here:
+ * a model cannot tell a KOH top-up from an anomaly unless the human action
+ * is a discrete label rather than free text. Logging must be ONE TAP,
+ * because anything slower will not happen during an actual incident -
+ * which is exactly when the label matters most.
+ *
+ * `quantity` marks actions where the amount is itself a feature (how much
+ * KOH went in), prompting for a number before submitting. Everything else
+ * files immediately on tap.
+ */
+export interface QuickEvent {
+  kind: EventKind;
+  label: string;
+  /** Equipment tag from the FEED register, where one applies. */
+  tag?: string;
+  /** Prompt for a quantity; unit shown next to the input. */
+  quantity?: { unit: string; hint: string };
+  /** Safety-critical actions render in rust rather than copper. */
+  severity?: "critical";
+}
+
+export const QUICK_EVENTS: QuickEvent[] = [
+  { kind: "koh_added", label: "Added KOH", tag: "LE-03", quantity: { unit: "L", hint: "Litres added" } },
+  { kind: "tote_changeout", label: "Tote changeout", tag: "LE-02" },
+  { kind: "phe_cleaned", label: "Cleaned PHE", tag: "PHE-101" },
+  { kind: "stator_changed", label: "Changed stator", tag: "P-101" },
+  { kind: "demister_cleaned", label: "Cleaned demister", tag: "T-101" },
+  { kind: "fuel_change", label: "Boiler fuel change" },
+  { kind: "sensor_calibration", label: "Sensor calibration" },
+  { kind: "purge_cycle", label: "Purge cycle" },
+  { kind: "boiler_trip", label: "Boiler trip", severity: "critical" },
+  { kind: "emergency_trip", label: "Emergency trip", severity: "critical" },
+];
 
 export interface EventCreateBody {
   kind: EventKind;
