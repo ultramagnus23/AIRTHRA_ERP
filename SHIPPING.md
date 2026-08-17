@@ -114,6 +114,42 @@ Options, in order of preference:
 
 ---
 
+---
+
+## Status as of 2026-08-17
+
+**Done and verified live:**
+
+| Item | Evidence |
+|---|---|
+| A1 login rate limiting | 5 failures → 429 + `Retry-After`; other accounts unaffected |
+| A2 MinIO bucket private | anonymous GET 403 (was 200); presigned GET 200 |
+| A3 infra ports → loopback | compose validated; MQTT TLS/WS left public for edge units |
+| A4 CORS from env | `CORS_ALLOWED_ORIGINS`, wildcard unsupported by design |
+| A5 field length validation | oversized login body → 422 |
+| A6 `compare_digest` | webhook secret |
+| A7 seed production guard | `APP_ENV=production` refuses without `ALLOW_SEED=1` |
+| A8 dependency audit | in CI, advisory |
+| B1 worker N+1 | 2,900 → **6 queries/cycle**, flat in plant count |
+| B3 pool sizing | env-tunable |
+| D/CI | full pipeline: gates, migration idempotency **and** reversibility, clock-gate regression test |
+| Clock trust gate | 6 cases incl. epoch boot, backwards jump, watermark persistence |
+| ML ground truth | 10 one-tap events + `calibration`/`purge` flags |
+
+**Still open, and why:**
+
+| Item | Why not done |
+|---|---|
+| 0.1 Real Modbus | Hardware-gated. Needs physical access to a unit. |
+| 0.2 Tenant onboarding | Genuinely large (schema + routers + UI + audit trail). Deserves focused effort, not a rushed pass. **Biggest software blocker.** |
+| 0.3 / #5 Tailscale provisioning | Needs an account and infra decisions. |
+| 0.4 Password reset | Depends on 0.2's user-management surface. |
+| B2 RLS on readings/kpis | Needs the TimescaleDB compression question re-tested first. |
+| B4 buffer load test | Needs a long-outage soak; can't be faked. |
+| B5 worker leader election | Only matters once >1 replica runs. |
+| #6 archive scheduler | One systemd timer — deploy-target dependent. |
+| Phase C thresholds/constants | **Process-engineering sign-off, not a code change.** |
+
 ## Suggested execution order
 
 1. **Phase A** in full — cheap, safe, no dependencies. *(in progress)*
