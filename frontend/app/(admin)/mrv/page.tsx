@@ -52,8 +52,8 @@ export default function MrvPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">MRV export</h1>
-        <p className="text-sm text-slate-600">
+        <h1 className="font-display text-2xl font-light text-fg">MRV export</h1>
+        <p className="text-sm text-mist">
           POST /admin/mrv_export/{"{plant_id}"}?period=YYYY-MM. Builds and uploads a ZIP
           server-side (readings parquet + calibration manifest + OTS proofs where available) -
           this can take a while for a full month, so each plant tracks its own loading state
@@ -62,17 +62,17 @@ export default function MrvPage() {
       </div>
 
       <label className="flex max-w-xs flex-col gap-1 text-sm">
-        <span className="text-xs font-medium text-slate-600">Period (YYYY-MM)</span>
+        <span className="font-mono text-xs tracking-[0.1em] text-mist uppercase">Period (YYYY-MM)</span>
         <input
           value={period}
           onChange={(e) => setPeriod(e.target.value)}
           placeholder="2026-08"
-          className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          className="rounded-lg border border-line bg-transparent px-2 py-1.5 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none"
         />
       </label>
 
-      {plantsError && <p className="text-sm text-red-700">{plantsError}</p>}
-      {!plants && !plantsError && <p className="text-sm text-slate-500">Loading plants...</p>}
+      {plantsError && <p className="text-sm text-rust">{plantsError}</p>}
+      {!plants && !plantsError && <p className="font-mono text-sm text-mist">Loading plants...</p>}
 
       <div className="flex flex-col gap-3">
         {plants?.map((p) => {
@@ -80,22 +80,23 @@ export default function MrvPage() {
           return (
             <div
               key={p.plant_id}
-              className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-2 rounded-2xl border border-hair bg-panel p-4 sm:flex-row sm:items-center sm:justify-between"
+              style={{ boxShadow: "var(--shadow-sm)" }}
             >
               <div>
-                <div className="font-medium text-slate-900">{p.name}</div>
-                <div className="font-mono text-xs text-slate-500">{p.plant_id}</div>
+                <div className="font-medium text-fg">{p.name}</div>
+                <div className="font-mono text-xs text-mist">{p.plant_id}</div>
               </div>
               <div className="flex flex-1 flex-col items-start gap-2 sm:items-end">
                 <button
                   onClick={() => runExport(p.plant_id)}
                   disabled={state.status === "loading" || !period}
-                  className="rounded-md bg-amber-500 px-4 py-1.5 text-sm font-semibold text-slate-900 hover:bg-amber-400 disabled:opacity-50"
+                  className="rounded-lg bg-rust px-4 py-1.5 text-sm font-semibold text-fg transition-colors duration-150 hover:bg-copper disabled:opacity-50"
                 >
                   {state.status === "loading" ? "Exporting..." : `Export MRV for ${period}`}
                 </button>
                 {state.status === "success" && (
-                  <div className="text-right text-xs text-emerald-700">
+                  <div className="text-right font-mono text-xs text-moss">
                     Done - {state.result.day_count} days.{" "}
                     <a
                       href={state.result.zip_url}
@@ -108,7 +109,7 @@ export default function MrvPage() {
                   </div>
                 )}
                 {state.status === "error" && (
-                  <div className="text-right text-xs text-red-700">{state.message}</div>
+                  <div className="text-right text-xs text-rust">{state.message}</div>
                 )}
               </div>
             </div>

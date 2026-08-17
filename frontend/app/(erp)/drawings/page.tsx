@@ -98,30 +98,33 @@ export default function DrawingsPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Drawings</h1>
-          <p className="text-sm text-slate-500">Revision chains per dwg_no. Released drawings are immutable - use Revise to create the next revision.</p>
+          <h1 className="font-display text-2xl font-light text-fg">Drawings</h1>
+          <p className="text-sm text-mist">Revision chains per dwg_no. Released drawings are immutable - use Revise to create the next revision.</p>
         </div>
-        <button onClick={() => setShowForm((s) => !s)} className="rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800">
+        <button
+          onClick={() => setShowForm((s) => !s)}
+          className="rounded-lg bg-rust px-3 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper"
+        >
           {showForm ? "Cancel" : "+ New drawing"}
         </button>
       </div>
 
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-6 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4">
+        <form onSubmit={handleCreate} className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-hair bg-panel p-4 sm:grid-cols-4" style={{ boxShadow: "var(--shadow-sm)" }}>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Project *</span>
-            <select required value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">-- select --</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.code} - {p.name}</option>)}
+            <span className="mb-1 block font-medium text-fg">Project *</span>
+            <select required value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+              <option value="" className="bg-panel">-- select --</option>
+              {projects.map((p) => <option key={p.id} value={p.id} className="bg-panel">{p.code} - {p.name}</option>)}
             </select>
           </label>
           <Field label="Drawing no. *" value={form.dwg_no} onChange={(v) => setForm({ ...form, dwg_no: v })} required />
           <Field label="Title" value={form.title} onChange={(v) => setForm({ ...form, title: v })} />
           <Field label="Revision" value={form.revision} onChange={(v) => setForm({ ...form, revision: v })} />
           <div className="sm:col-span-4">
-            <button type="submit" disabled={saving} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+            <button type="submit" disabled={saving} className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">
               {saving ? "Saving..." : "Create drawing"}
             </button>
           </div>
@@ -129,51 +132,51 @@ export default function DrawingsPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading...</p>
+        <p className="text-sm text-mist">Loading...</p>
       ) : groups.size === 0 ? (
-        <p className="text-sm text-slate-500">No drawings yet.</p>
+        <p className="text-sm text-mist">No drawings yet.</p>
       ) : (
         <div className="space-y-4">
           {Array.from(groups.entries()).map(([key, chain]) => {
             const sorted = [...chain].sort((a, b) => (a.revision ?? "").localeCompare(b.revision ?? ""));
             const project = projectByCode.get(sorted[0].project_id);
             return (
-              <div key={key} className="rounded-lg border border-slate-200 bg-white p-4">
+              <div key={key} className="rounded-2xl border border-hair bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-900">{sorted[0].dwg_no} <span className="font-normal text-slate-500">- {project?.code ?? sorted[0].project_id}</span></h3>
+                  <h3 className="font-medium text-fg">{sorted[0].dwg_no} <span className="font-normal text-mist">- {project?.code ?? sorted[0].project_id}</span></h3>
                 </div>
                 <ol className="space-y-2">
                   {sorted.map((d, i) => (
-                    <li key={d.id} className="flex items-center gap-3 rounded-md border border-slate-100 px-3 py-2">
-                      <span className="text-xs text-slate-400">{i < sorted.length - 1 ? "↳ superseded" : "↳ current"}</span>
-                      <span className="font-mono text-sm font-medium text-slate-800">Rev {d.revision || "-"}</span>
+                    <li key={d.id} className="flex items-center gap-3 rounded-lg border border-hair bg-midnight px-3 py-2">
+                      <span className="font-mono text-xs text-mist">{i < sorted.length - 1 ? "↳ superseded" : "↳ current"}</span>
+                      <span className="font-mono text-sm font-medium text-fg">Rev {d.revision || "-"}</span>
                       {editId === d.id ? (
-                        <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm" />
+                        <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="flex-1 rounded-lg border border-line bg-transparent px-2 py-1 text-sm text-fg focus:border-copper focus:outline-none" />
                       ) : (
-                        <span className="flex-1 text-sm text-slate-600">{d.title || "-"}</span>
+                        <span className="flex-1 text-sm text-mist">{d.title || "-"}</span>
                       )}
                       <DrawingStatusBadge status={d.status} />
                       <div className="flex gap-2 text-xs whitespace-nowrap">
                         {editId === d.id ? (
                           <>
-                            <button onClick={() => saveEditTitle(d.id)} disabled={saving} className="text-teal-700 hover:underline">Save</button>
-                            <button onClick={() => setEditId(null)} className="text-slate-500 hover:underline">Cancel</button>
+                            <button onClick={() => saveEditTitle(d.id)} disabled={saving} className="text-copper hover:underline">Save</button>
+                            <button onClick={() => setEditId(null)} className="text-mist hover:underline">Cancel</button>
                           </>
                         ) : d.status === "released" ? (
-                          <button onClick={() => setReviseId(reviseId === d.id ? null : d.id)} className="text-teal-700 hover:underline">Revise</button>
+                          <button onClick={() => setReviseId(reviseId === d.id ? null : d.id)} className="text-copper hover:underline">Revise</button>
                         ) : d.status === "superseded" ? (
-                          <span className="text-slate-400">immutable (superseded)</span>
+                          <span className="text-mist">immutable (superseded)</span>
                         ) : (
                           <>
-                            <button onClick={() => { setEditId(d.id); setEditTitle(d.title ?? ""); }} className="text-teal-700 hover:underline">Edit</button>
-                            <button onClick={() => handleRelease(d.id)} className="text-teal-700 hover:underline">Release</button>
+                            <button onClick={() => { setEditId(d.id); setEditTitle(d.title ?? ""); }} className="text-copper hover:underline">Edit</button>
+                            <button onClick={() => handleRelease(d.id)} className="text-copper hover:underline">Release</button>
                           </>
                         )}
                       </div>
                       {reviseId === d.id && (
                         <div className="flex items-center gap-2">
-                          <input value={reviseRev} onChange={(e) => setReviseRev(e.target.value)} className="w-16 rounded border border-slate-300 px-2 py-1 text-sm" placeholder="new rev" />
-                          <button onClick={() => handleRevise(d.id)} disabled={saving} className="rounded bg-teal-700 px-2 py-1 text-xs text-white">Confirm revise</button>
+                          <input value={reviseRev} onChange={(e) => setReviseRev(e.target.value)} className="w-16 rounded-lg border border-line bg-transparent px-2 py-1 text-sm text-fg focus:border-copper focus:outline-none" placeholder="new rev" />
+                          <button onClick={() => handleRevise(d.id)} disabled={saving} className="rounded-lg bg-rust px-2 py-1 text-xs text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper">Confirm revise</button>
                         </div>
                       )}
                     </li>
@@ -189,11 +192,36 @@ export default function DrawingsPage() {
 }
 
 function DrawingStatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    draft: "bg-slate-100 text-slate-700", for_review: "bg-blue-100 text-blue-800",
-    released: "bg-green-100 text-green-800", superseded: "bg-slate-200 text-slate-500",
-  };
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors[status] ?? "bg-slate-100"}`}>{status}</span>;
+  if (status === "released") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-moss/15 px-2 py-0.5 text-xs font-medium text-moss">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-moss" aria-hidden />
+        Released
+      </span>
+    );
+  }
+  if (status === "for_review") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-copper/15 px-2 py-0.5 text-xs font-medium text-copper">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-copper" aria-hidden />
+        For review
+      </span>
+    );
+  }
+  if (status === "superseded") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-midnight px-2 py-0.5 text-xs font-medium text-mist">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-mist" aria-hidden />
+        Superseded
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-midnight px-2 py-0.5 text-xs font-medium text-mist">
+      <span className="inline-block h-1.5 w-1.5 rounded-full bg-mist" aria-hidden />
+      Draft
+    </span>
+  );
 }
 
 function Field({
@@ -201,8 +229,13 @@ function Field({
 }: { label: string; value: string; onChange: (v: string) => void; className?: string; required?: boolean }) {
   return (
     <label className={`block text-sm ${className ?? ""}`}>
-      <span className="mb-1 block font-medium text-slate-700">{label}</span>
-      <input required={required} value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
+      <span className="mb-1 block font-medium text-fg">{label}</span>
+      <input
+        required={required}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none"
+      />
     </label>
   );
 }

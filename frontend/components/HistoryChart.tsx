@@ -14,7 +14,16 @@ import {
 import { getHistory, ApiError } from "@/lib/api";
 import { SENSOR_MANIFEST, type HistoryResponse } from "@/lib/types";
 
-const COLORS = ["#0f172a", "#0ea5e9", "#f59e0b", "#059669", "#dc2626", "#7c3aed", "#0891b2"];
+// Airthra palette only - cycled across however many sensors are selected.
+const COLORS = [
+  "oklch(0.72 0.15 54)", // copper
+  "oklch(0.64 0.1 152)", // moss
+  "oklch(0.52 0.16 48)", // rust
+  "oklch(0.935 0.062 96)", // sand
+  "oklch(0.965 0.012 236)", // fg
+  "oklch(0.72 0.022 240)", // mist
+  "oklch(0.86 0.09 54)", // copper, lighter
+];
 
 function isAggPoint(p: HistoryResponse["points"][number]): p is Extract<
   HistoryResponse["points"][number],
@@ -94,32 +103,36 @@ export default function HistoryChart({ plantId }: { plantId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-4 rounded-lg border border-slate-200 bg-white p-4">
+      <div
+        className="flex flex-wrap items-end gap-4 rounded-2xl border border-hair bg-panel p-4"
+        style={{ boxShadow: "var(--shadow-sm)" }}
+      >
         <div>
-          <label className="block text-xs font-medium text-slate-600">Start</label>
+          <label className="block text-xs font-medium text-mist">Start</label>
           <input
             type="datetime-local"
             value={start}
             onChange={(e) => setStart(e.target.value)}
-            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+            className="rounded-lg border border-line bg-transparent px-2 py-1.5 font-mono text-sm text-fg [color-scheme:dark] focus:border-copper focus:outline-none"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600">End</label>
+          <label className="block text-xs font-medium text-mist">End</label>
           <input
             type="datetime-local"
             value={end}
             onChange={(e) => setEnd(e.target.value)}
-            className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+            className="rounded-lg border border-line bg-transparent px-2 py-1.5 font-mono text-sm text-fg [color-scheme:dark] focus:border-copper focus:outline-none"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-3">
           {SENSOR_MANIFEST.map((s) => (
-            <label key={s.sensor_id} className="flex items-center gap-1 text-xs text-slate-600">
+            <label key={s.sensor_id} className="flex items-center gap-1.5 text-xs text-mist">
               <input
                 type="checkbox"
                 checked={selected.includes(s.sensor_id)}
                 onChange={() => toggleSensor(s.sensor_id)}
+                className="accent-copper"
               />
               {s.label}
             </label>
@@ -128,33 +141,51 @@ export default function HistoryChart({ plantId }: { plantId: string }) {
         <button
           onClick={load}
           disabled={loading || selected.length === 0}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+          className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50"
         >
-          {loading ? "Loading..." : "Load"}
+          {loading ? "Loading…" : "Load"}
         </button>
       </div>
 
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && (
+        <p className="rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>
+      )}
 
       {data && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <p className="mb-2 text-xs text-slate-500">
-            Resolution: <span className="font-mono">{data.resolution}</span> (auto-selected by the
+        <div
+          className="rounded-2xl border border-hair bg-panel p-4"
+          style={{ boxShadow: "var(--shadow-sm)" }}
+        >
+          <p className="mb-2 font-mono text-xs text-mist">
+            resolution: <span className="text-copper">{data.resolution}</span> (auto-selected by the
             backend from the requested range — {data.points.length} points)
           </p>
           <div className="h-96 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={rows}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <CartesianGrid stroke="var(--color-hair)" vertical={false} />
                 <XAxis
                   dataKey="ts"
                   tickFormatter={(v) => new Date(v).toLocaleString()}
                   minTickGap={40}
-                  fontSize={11}
+                  fontSize={10}
+                  fontFamily="var(--font-mono)"
+                  stroke="var(--color-mist)"
+                  tickLine={false}
+                  axisLine={{ stroke: "var(--color-line)" }}
                 />
-                <YAxis fontSize={11} />
-                <Tooltip labelFormatter={(v) => new Date(String(v)).toLocaleString()} />
-                <Legend />
+                <YAxis fontSize={10} fontFamily="var(--font-mono)" stroke="var(--color-mist)" tickLine={false} axisLine={false} />
+                <Tooltip
+                  labelFormatter={(v) => new Date(String(v)).toLocaleString()}
+                  contentStyle={{
+                    background: "var(--color-midnight)",
+                    border: "1px solid var(--color-line)",
+                    borderRadius: 8,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
+                  }}
+                />
+                <Legend wrapperStyle={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--color-mist)" }} />
                 {selected.map((id, i) => (
                   <Line
                     key={id}

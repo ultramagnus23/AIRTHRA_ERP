@@ -57,83 +57,83 @@ export default function LogisticsPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-lg font-semibold text-slate-900">Dispatch / Trips</h1>
-      <p className="mb-4 text-sm text-slate-500">
+      <h1 className="mb-1 font-display text-2xl font-light text-fg">Dispatch / Trips</h1>
+      <p className="mb-4 text-sm text-mist">
         Start a trip (dispatcher action). The live GPS trip map itself is the driver-facing mobile page - this only creates the trip and its one-time token.
       </p>
 
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
 
       {lastTrip?.token && (
-        <div className="mb-4 rounded-md bg-amber-50 px-3 py-3 text-sm text-amber-900">
-          <p className="font-medium">Trip {lastTrip.id.slice(0, 8)} started. One-time driver token (not retrievable again):</p>
-          <code className="mt-1 block break-all rounded bg-white px-2 py-1 text-xs">{lastTrip.token}</code>
-          <p className="mt-1 text-xs">Share this with the driver device - it authenticates GPS pings for this trip only.</p>
+        <div className="mb-4 rounded-2xl border border-hair bg-panel px-3 py-3 text-sm text-fg" style={{ boxShadow: "var(--shadow-sm)" }}>
+          <p className="font-medium text-copper">Trip {lastTrip.id.slice(0, 8)} started. One-time driver token (not retrievable again):</p>
+          <code className="mt-1 block break-all rounded-lg bg-midnight px-2 py-1 font-mono text-xs text-fg">{lastTrip.token}</code>
+          <p className="mt-1 text-xs text-mist">Share this with the driver device - it authenticates GPS pings for this trip only.</p>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="mb-8 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4">
+      <form onSubmit={handleSubmit} className="mb-8 grid grid-cols-1 gap-3 rounded-2xl border border-hair bg-panel p-4 sm:grid-cols-4" style={{ boxShadow: "var(--shadow-sm)" }}>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Vehicle no. *</span>
-          <input required value={form.vehicle_no} onChange={(e) => setForm({ ...form, vehicle_no: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="GA-05-AB-1234" />
+          <span className="mb-1 block font-medium text-fg">Vehicle no. *</span>
+          <input required value={form.vehicle_no} onChange={(e) => setForm({ ...form, vehicle_no: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" placeholder="GA-05-AB-1234" />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Driver</span>
-          <input value={form.driver} onChange={(e) => setForm({ ...form, driver: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <span className="mb-1 block font-medium text-fg">Driver</span>
+          <input value={form.driver} onChange={(e) => setForm({ ...form, driver: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Phone</span>
-          <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <span className="mb-1 block font-medium text-fg">Phone</span>
+          <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Purpose *</span>
-          <select value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value as typeof form.purpose })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <option value="koh_delivery">KOH delivery</option>
-            <option value="k2so3_pickup">K2SO3 pickup</option>
-            <option value="dispatch">Dispatch (equipment)</option>
+          <span className="mb-1 block font-medium text-fg">Purpose *</span>
+          <select value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value as typeof form.purpose })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+            <option value="koh_delivery" className="bg-panel">KOH delivery</option>
+            <option value="k2so3_pickup" className="bg-panel">K2SO3 pickup</option>
+            <option value="dispatch" className="bg-panel">Dispatch (equipment)</option>
           </select>
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Origin</span>
-          <input value={form.origin} onChange={(e) => setForm({ ...form, origin: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="Airthra Research, Verna, Goa" />
+          <span className="mb-1 block font-medium text-fg">Origin</span>
+          <input value={form.origin} onChange={(e) => setForm({ ...form, origin: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" placeholder="Airthra Research, Verna, Goa" />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Destination plant id</span>
-          <input value={form.dest_plant_id} onChange={(e) => setForm({ ...form, dest_plant_id: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="goa_pilot_01" />
+          <span className="mb-1 block font-medium text-fg">Destination plant id</span>
+          <input value={form.dest_plant_id} onChange={(e) => setForm({ ...form, dest_plant_id: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" placeholder="goa_pilot_01" />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">E-way bill no.</span>
-          <input value={form.eway_bill_no} onChange={(e) => setForm({ ...form, eway_bill_no: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <span className="mb-1 block font-medium text-fg">E-way bill no.</span>
+          <input value={form.eway_bill_no} onChange={(e) => setForm({ ...form, eway_bill_no: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
         </label>
         <div className="flex items-end sm:col-span-4">
-          <button type="submit" disabled={saving} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+          <button type="submit" disabled={saving} className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">
             {saving ? "Starting..." : "Start trip"}
           </button>
         </div>
       </form>
 
-      <h2 className="mb-2 text-sm font-semibold text-slate-900">Trips</h2>
+      <h2 className="mb-2 text-sm font-semibold text-fg">Trips</h2>
       {loading ? (
-        <p className="text-sm text-slate-500">Loading...</p>
+        <p className="text-sm text-mist">Loading...</p>
       ) : trips.length === 0 ? (
-        <p className="text-sm text-slate-500">No trips yet.</p>
+        <p className="text-sm text-mist">No trips yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-hair bg-panel" style={{ boxShadow: "var(--shadow-sm)" }}>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="font-mono text-xs tracking-[0.1em] text-mist uppercase">
               <tr><th className="px-3 py-2">Vehicle</th><th className="px-3 py-2">Purpose</th><th className="px-3 py-2">Origin</th><th className="px-3 py-2">Destination</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Started</th></tr>
             </thead>
             <tbody>
               {trips.map((t) => (
-                <tr key={t.id} className="border-t border-slate-100">
-                  <td className="px-3 py-2 font-medium text-slate-900">{t.vehicle_no}</td>
-                  <td className="px-3 py-2 capitalize text-slate-600">{t.purpose.replaceAll("_", " ")}</td>
-                  <td className="px-3 py-2 text-slate-600">{t.origin || "-"}</td>
-                  <td className="px-3 py-2 text-slate-600">{t.dest_plant_id || "-"}</td>
+                <tr key={t.id} className="border-t border-hair hover:bg-midnight">
+                  <td className="px-3 py-2 font-mono font-medium text-fg">{t.vehicle_no}</td>
+                  <td className="px-3 py-2 capitalize text-mist">{t.purpose.replaceAll("_", " ")}</td>
+                  <td className="px-3 py-2 text-mist">{t.origin || "-"}</td>
+                  <td className="px-3 py-2 text-mist">{t.dest_plant_id || "-"}</td>
                   <td className="px-3 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${t.status === "completed" ? "bg-green-100 text-green-800" : t.status === "in_transit" ? "bg-blue-100 text-blue-800" : "bg-slate-100 text-slate-700"}`}>{t.status}</span>
+                    <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${t.status === "completed" ? "bg-moss/20 text-moss" : t.status === "in_transit" ? "bg-copper/20 text-copper" : "bg-midnight text-mist"}`}>{t.status}</span>
                   </td>
-                  <td className="px-3 py-2 text-slate-600">{t.started ? new Date(t.started).toLocaleString() : "-"}</td>
+                  <td className="px-3 py-2 font-mono text-mist">{t.started ? new Date(t.started).toLocaleString() : "-"}</td>
                 </tr>
               ))}
             </tbody>

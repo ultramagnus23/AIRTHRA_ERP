@@ -55,73 +55,119 @@ export default function InvoiceDetailPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
-  if (error && !invoice) return <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>;
+  if (loading) return <p className="text-sm text-mist">Loading...</p>;
+  if (error && !invoice) return <p className="rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>;
   if (!invoice) return null;
 
   const canApprove = invoice.status !== "approved" && invoice.status !== "paid" && match?.ok === true;
+  const isApprovedLike = invoice.status === "approved" || invoice.status === "paid";
 
   return (
     <div>
-      <Link href="/invoices" className="mb-4 inline-block text-sm text-teal-700 hover:underline">&larr; Back to invoices</Link>
+      <Link href="/invoices" className="mb-4 inline-block text-sm text-copper hover:underline">&larr; Back to invoices</Link>
 
-      <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="mb-6 rounded-2xl border border-hair bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-slate-900">{invoice.inv_no}</h1>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${invoice.status === "approved" || invoice.status === "paid" ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-700"}`}>{invoice.status}</span>
+          <h1 className="font-display text-2xl font-light text-fg">{invoice.inv_no}</h1>
+          <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${isApprovedLike ? "border border-moss text-moss" : "border border-line text-mist"}`}>{invoice.status}</span>
         </div>
         <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
-          <div><dt className="text-slate-500">Date</dt><dd className="text-slate-800">{invoice.date || "-"}</dd></div>
-          <div><dt className="text-slate-500">Taxable</dt><dd className="text-slate-800">₹{invoice.taxable}</dd></div>
-          <div><dt className="text-slate-500">GST</dt><dd className="text-slate-800">₹{invoice.gst}</dd></div>
-          <div><dt className="text-slate-500">Total</dt><dd className="text-slate-800">₹{invoice.total}</dd></div>
+          <div><dt className="text-mist">Date</dt><dd className="font-mono text-fg">{invoice.date || "-"}</dd></div>
+          <div><dt className="text-mist">Taxable</dt><dd className="font-mono text-fg">₹{invoice.taxable}</dd></div>
+          <div><dt className="text-mist">GST</dt><dd className="font-mono text-fg">₹{invoice.gst}</dd></div>
+          <div><dt className="text-mist">Total</dt><dd className="font-mono text-fg">₹{invoice.total}</dd></div>
         </dl>
       </div>
 
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
 
-      <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="mb-6 rounded-2xl border border-hair bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">3-way match (PO vs GRN vs invoice)</h2>
-          <button onClick={handleRecheck} disabled={checking} className="text-sm text-teal-700 hover:underline disabled:opacity-50">
+          <h2 className="text-sm font-semibold text-fg">3-way match (PO vs GRN vs invoice)</h2>
+          <button onClick={handleRecheck} disabled={checking} className="text-sm text-copper hover:underline disabled:opacity-50">
             {checking ? "Checking..." : "Re-check"}
           </button>
         </div>
 
         {!invoice.po_id && (
-          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">This invoice is not linked to a PO - 3-way match cannot pass.</p>
+          <p className="mb-3 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-rust">
+            <span className="font-medium">Mismatch —</span> this invoice is not linked to a PO. The 3-way match cannot pass and approval is blocked.
+          </p>
         )}
 
         {po && (
           <div className="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
-            <div><dt className="text-slate-500">Linked PO</dt><dd className="font-mono text-slate-800">{po.po_no}</dd></div>
-            <div><dt className="text-slate-500">PO status</dt><dd className="text-slate-800">{po.status}</dd></div>
+            <div><dt className="text-mist">Linked PO</dt><dd className="font-mono text-fg">{po.po_no}</dd></div>
+            <div><dt className="text-mist">PO status</dt><dd className="text-fg">{po.status}</dd></div>
           </div>
         )}
 
         {match && (
-          <div className="space-y-2">
-            <p className={`rounded-md px-3 py-2 text-sm font-medium ${match.ok ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
-              {match.ok ? "Match OK - eligible for approval." : `Match failed: ${match.reason}`}
-            </p>
-            <div className="overflow-x-auto rounded-md border border-slate-200">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                  <tr><th className="px-3 py-2">Check</th><th className="px-3 py-2">Invoice value</th><th className="px-3 py-2">PO expected / ordered</th><th className="px-3 py-2">Result</th></tr>
-                </thead>
-                <tbody>
-                  {Object.entries(match.checks).map(([name, c]) => (
-                    <tr key={name} className="border-t border-slate-100">
-                      <td className="px-3 py-2 capitalize">{name.replaceAll("_", " ")}</td>
-                      <td className="px-3 py-2">{c.invoice ?? c.grn_accepted_qty}</td>
-                      <td className="px-3 py-2">{c.po_expected ?? c.ordered_qty}</td>
-                      <td className="px-3 py-2">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${c.ok ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>{c.ok ? "OK" : "FAIL"}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="space-y-3">
+            {/* Overall match signal - the single most important call-out on this screen */}
+            <div
+              className={`flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-sm font-medium ${
+                match.ok ? "border-moss text-moss" : "border-rust text-rust"
+              }`}
+              style={{ boxShadow: "var(--shadow-sm)" }}
+            >
+              <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${match.ok ? "bg-moss" : "bg-rust"}`} aria-hidden />
+              {match.ok ? "Matched — eligible for approval." : `Mismatch: ${match.reason}`}
+            </div>
+
+            {/* Per-check comparison — PO/GRN expected vs invoice actual */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {Object.entries(match.checks).map(([name, c]) => {
+                const rawExpected = c.po_expected ?? c.grn_accepted_qty ?? "-";
+                const invoiceVal = c.invoice;
+                const invoiceNum = Number(invoiceVal);
+                const expectedNum = Number(rawExpected);
+                // Values arrive as raw floats (Decimal-from-Postgres via
+                // JSON) with binary-float noise, e.g. 82.4249999999997 -
+                // round for display only, never for the match logic
+                // itself (that's already decided server-side).
+                const fmtNum = (v: unknown) => {
+                  if (v === null || v === undefined || v === "") return "-";
+                  const n = Number(v);
+                  return Number.isFinite(n) ? n.toFixed(3).replace(/\.?0+$/, "") : String(v);
+                };
+                const expected = fmtNum(rawExpected);
+                const canDiff = !c.ok && Number.isFinite(invoiceNum) && Number.isFinite(expectedNum);
+                const diff = canDiff ? invoiceNum - expectedNum : null;
+
+                return (
+                  <div
+                    key={name}
+                    className={`rounded-2xl border p-3 ${c.ok ? "border-moss" : "border-rust"}`}
+                    style={{ boxShadow: "var(--shadow-sm)" }}
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-mono text-xs tracking-[0.1em] text-mist uppercase">{name.replaceAll("_", " ")}</span>
+                      <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${c.ok ? "border border-moss text-moss" : "border border-rust text-rust"}`}>
+                        {c.ok ? "Matched" : "Mismatch"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <dt className="text-xs text-mist">Invoice</dt>
+                        <dd className="font-mono text-fg">{fmtNum(invoiceVal)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-mist">PO / GRN expected</dt>
+                        <dd className="font-mono text-fg">{expected}</dd>
+                      </div>
+                    </div>
+                    {c.tolerance_pct && (
+                      <p className="mt-2 font-mono text-[11px] text-mist">tolerance {c.tolerance_pct}</p>
+                    )}
+                    {diff !== null && (
+                      <p className="mt-2 font-mono text-xs text-rust">
+                        differs by {diff > 0 ? "+" : ""}{diff.toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -131,12 +177,12 @@ export default function InvoiceDetailPage() {
             onClick={handleApprove}
             disabled={!canApprove || approving}
             title={!canApprove && match ? "Cannot approve: 3-way match must pass first (mirrors backend rejection)" : undefined}
-            className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {approving ? "Approving..." : invoice.status === "approved" || invoice.status === "paid" ? "Already approved" : "Approve invoice"}
+            {approving ? "Approving..." : isApprovedLike ? "Already approved" : "Approve invoice"}
           </button>
-          {!canApprove && match && invoice.status !== "approved" && invoice.status !== "paid" && (
-            <p className="mt-1 text-xs text-slate-500">Approval is disabled because the 3-way match above has not passed - the backend would reject it with a 400.</p>
+          {!canApprove && match && !isApprovedLike && (
+            <p className="mt-1 text-xs text-mist">Approval is disabled because the 3-way match above has not passed - the backend would reject it with a 400.</p>
           )}
         </div>
       </div>

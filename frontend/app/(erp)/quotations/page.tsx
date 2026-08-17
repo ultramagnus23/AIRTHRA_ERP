@@ -54,43 +54,43 @@ export default function QuotationsPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Quotations</h1>
-          <p className="text-sm text-slate-500">Vendor (inbound) or customer (outbound) quotes, linked to a project.</p>
+          <h1 className="font-display text-2xl font-light text-fg">Quotations</h1>
+          <p className="text-sm text-mist">Vendor (inbound) or customer (outbound) quotes, linked to a project.</p>
         </div>
-        <button onClick={() => setShowForm((s) => !s)} className="rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800">
+        <button onClick={() => setShowForm((s) => !s)} className="rounded-lg bg-rust px-3 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper">
           {showForm ? "Cancel" : "+ New quotation"}
         </button>
       </div>
 
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-6 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4">
+        <form onSubmit={handleCreate} className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-hair bg-panel p-4 sm:grid-cols-4" style={{ boxShadow: "var(--shadow-sm)" }}>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Direction</span>
-            <select value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value as "vendor" | "customer" })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="vendor">Vendor (inbound quote from a vendor)</option>
-              <option value="customer">Customer (outbound quote to a customer)</option>
+            <span className="mb-1 block font-medium text-fg">Direction</span>
+            <select value={form.direction} onChange={(e) => setForm({ ...form, direction: e.target.value as "vendor" | "customer" })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+              <option value="vendor" className="bg-panel">Vendor (inbound quote from a vendor)</option>
+              <option value="customer" className="bg-panel">Customer (outbound quote to a customer)</option>
             </select>
           </label>
           <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block font-medium text-slate-700">
+            <span className="mb-1 block font-medium text-fg">
               Party ID {form.direction === "vendor" ? "(vendor UUID)" : "(no customers table in this schema - free text id)"}
             </span>
-            <input required value={form.party_id} onChange={(e) => setForm({ ...form, party_id: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono" placeholder="paste vendor id from /vendors, or any identifier" />
+            <input required value={form.party_id} onChange={(e) => setForm({ ...form, party_id: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm font-mono text-fg placeholder:text-mist focus:border-copper focus:outline-none" placeholder="paste vendor id from /vendors, or any identifier" />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Project</span>
-            <select value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">-- none --</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.code} - {p.name}</option>)}
+            <span className="mb-1 block font-medium text-fg">Project</span>
+            <select value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+              <option value="" className="bg-panel">-- none --</option>
+              {projects.map((p) => <option key={p.id} value={p.id} className="bg-panel">{p.code} - {p.name}</option>)}
             </select>
           </label>
           <Field label="Ref no." value={form.ref_no} onChange={(v) => setForm({ ...form, ref_no: v })} />
           <Field label="Date" value={form.date} onChange={(v) => setForm({ ...form, date: v })} type="date" />
           <Field label="Valid till" value={form.valid_till} onChange={(v) => setForm({ ...form, valid_till: v })} type="date" />
           <div className="sm:col-span-4">
-            <button type="submit" disabled={saving} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+            <button type="submit" disabled={saving} className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">
               {saving ? "Saving..." : "Create quotation"}
             </button>
           </div>
@@ -98,23 +98,23 @@ export default function QuotationsPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading...</p>
+        <p className="text-sm text-mist">Loading...</p>
       ) : quotations.length === 0 ? (
-        <p className="text-sm text-slate-500">No quotations yet.</p>
+        <p className="text-sm text-mist">No quotations yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-hair bg-panel" style={{ boxShadow: "var(--shadow-sm)" }}>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="font-mono text-xs tracking-[0.1em] text-mist uppercase">
               <tr><th className="px-3 py-2">Ref no.</th><th className="px-3 py-2">Direction</th><th className="px-3 py-2">Project</th><th className="px-3 py-2">Date</th><th className="px-3 py-2">Status</th></tr>
             </thead>
             <tbody>
               {quotations.map((q) => (
-                <tr key={q.id} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-2"><Link href={`/quotations/${q.id}`} className="font-medium text-teal-700 hover:underline">{q.ref_no || q.id.slice(0, 8)}</Link></td>
-                  <td className="px-3 py-2 text-slate-600 capitalize">{q.direction}</td>
-                  <td className="px-3 py-2 text-slate-600">{q.project_id ? (projectByCode.get(q.project_id)?.code ?? "-") : "-"}</td>
-                  <td className="px-3 py-2 text-slate-600">{q.date || "-"}</td>
-                  <td className="px-3 py-2 text-slate-600">{q.status}</td>
+                <tr key={q.id} className="border-t border-hair hover:bg-midnight">
+                  <td className="px-3 py-2"><Link href={`/quotations/${q.id}`} className="font-medium text-copper hover:underline">{q.ref_no || q.id.slice(0, 8)}</Link></td>
+                  <td className="px-3 py-2 text-mist capitalize">{q.direction}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-mist">{q.project_id ? (projectByCode.get(q.project_id)?.code ?? "-") : "-"}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-mist">{q.date || "-"}</td>
+                  <td className="px-3 py-2 text-mist">{q.status}</td>
                 </tr>
               ))}
             </tbody>
@@ -130,8 +130,8 @@ function Field({
 }: { label: string; value: string; onChange: (v: string) => void; className?: string; type?: string }) {
   return (
     <label className={`block text-sm ${className ?? ""}`}>
-      <span className="mb-1 block font-medium text-slate-700">{label}</span>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
+      <span className="mb-1 block font-medium text-fg">{label}</span>
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
     </label>
   );
 }

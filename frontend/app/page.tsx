@@ -23,11 +23,11 @@ export default async function Home() {
     redirect("/fleet");
   }
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-      <h1 className="text-xl font-semibold">Airthra Platform</h1>
-      <p className="text-slate-600">
-        Signed in as <span className="font-mono">{session.role}</span>. The admin
-        console for this role has not been built yet in this scaffold.
+    <main className="flex flex-1 flex-col items-center justify-center gap-2 bg-bg p-8 text-center">
+      <h1 className="font-display text-2xl font-light text-fg">Airthra Platform</h1>
+      <p className="text-mist">
+        Signed in as <span className="font-mono text-copper">{session.role}</span>. No workspace is
+        configured for this role.
       </p>
     </main>
   );

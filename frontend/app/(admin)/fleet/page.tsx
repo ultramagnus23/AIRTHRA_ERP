@@ -12,31 +12,31 @@ import type { FleetEntry, FleetResponse } from "@/lib/admin-types";
 // calls a clean color-coded table an acceptable substitute. The health
 // colors/thresholds are exactly GET /admin/fleet's payload, rendered
 // with zero client-side recomputation.
+// Fleet status colors mapped onto the Airthra semantic tokens: green (ok)
+// = moss, yellow (degraded) = copper, red (critical) = rust, gray
+// (unknown/offline) = mist. Always paired with the text label, never
+// color alone, per DESIGN.md's status-badge rule.
 const COLOR_STYLES: Record<string, string> = {
-  green: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  yellow: "bg-amber-100 text-amber-800 border-amber-300",
-  red: "bg-red-100 text-red-800 border-red-300",
-  gray: "bg-slate-100 text-slate-600 border-slate-300",
+  green: "border-moss/40 bg-moss/10 text-moss",
+  yellow: "border-copper/40 bg-copper/10 text-copper",
+  red: "border-rust/40 bg-rust/10 text-rust",
+  gray: "border-line bg-midnight text-mist",
+};
+const DOT_STYLES: Record<string, string> = {
+  green: "bg-moss",
+  yellow: "bg-copper",
+  red: "bg-rust",
+  gray: "bg-mist",
 };
 
 function ColorBadge({ color }: { color: string }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-0.5 font-mono text-xs font-medium ${
         COLOR_STYLES[color] ?? COLOR_STYLES.gray
       }`}
     >
-      <span
-        className={`h-2 w-2 rounded-full ${
-          color === "green"
-            ? "bg-emerald-500"
-            : color === "yellow"
-              ? "bg-amber-500"
-              : color === "red"
-                ? "bg-red-500"
-                : "bg-slate-400"
-        }`}
-      />
+      <span className={`h-2 w-2 rounded-full ${DOT_STYLES[color] ?? DOT_STYLES.gray}`} />
       {color}
     </span>
   );
@@ -67,27 +67,33 @@ export default function FleetPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Fleet health</h1>
-        <p className="text-sm text-slate-600">
+        <h1 className="font-display text-2xl font-light text-fg">Fleet health</h1>
+        <p className="text-sm text-mist">
           Cross-plant status, computed server-side by GET /admin/fleet. Table view (see note in
           source) in place of a live map.
         </p>
       </div>
 
-      {loading && <p className="text-sm text-slate-500">Loading fleet status...</p>}
-      {error && <p className="text-sm text-red-700">{error}</p>}
+      {loading && <p className="font-mono text-sm text-mist">Loading fleet status...</p>}
+      {error && <p className="text-sm text-rust">{error}</p>}
 
       {data && (
         <>
-          <div className="rounded-md border border-slate-200 bg-white p-3 text-xs text-slate-500">
+          <div
+            className="rounded-2xl border border-hair bg-panel p-3 font-mono text-xs text-mist"
+            style={{ boxShadow: "var(--shadow-sm)" }}
+          >
             Thresholds: offline after {data.thresholds.offline_threshold_s}s of no readings;
             degraded when &gt;{data.thresholds.degraded_flag_pct}% of readings in the trailing{" "}
             {data.thresholds.degraded_window_s / 60}min are non-good.
           </div>
 
-          <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+          <div
+            className="overflow-x-auto rounded-2xl border border-hair bg-panel"
+            style={{ boxShadow: "var(--shadow-sm)" }}
+          >
             <table className="w-full min-w-[640px] text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+              <thead className="border-b border-hair font-mono text-xs tracking-[0.1em] text-mist uppercase">
                 <tr>
                   <th className="px-4 py-2">Plant</th>
                   <th className="px-4 py-2">Status</th>
@@ -98,28 +104,28 @@ export default function FleetPage() {
               </thead>
               <tbody>
                 {data.fleet.map((p: FleetEntry) => (
-                  <tr key={p.plant_id} className="border-b border-slate-100 last:border-0">
+                  <tr key={p.plant_id} className="border-b border-hair last:border-0">
                     <td className="px-4 py-2">
-                      <div className="font-medium text-slate-900">{p.name}</div>
-                      <div className="font-mono text-xs text-slate-500">{p.plant_id}</div>
+                      <div className="font-medium text-fg">{p.name}</div>
+                      <div className="font-mono text-xs text-mist">{p.plant_id}</div>
                     </td>
                     <td className="px-4 py-2">
                       <ColorBadge color={p.color} />
                     </td>
-                    <td className="px-4 py-2 text-slate-700">
+                    <td className="px-4 py-2 font-mono text-fg">
                       {p.last_reading_ts ? new Date(p.last_reading_ts).toLocaleString() : "never"}
                     </td>
-                    <td className="px-4 py-2 text-slate-700">
+                    <td className="px-4 py-2 font-mono text-fg">
                       {p.flagged_pct_last_hour !== null ? `${p.flagged_pct_last_hour}%` : "-"}
                     </td>
-                    <td className="px-4 py-2 text-slate-600">
+                    <td className="px-4 py-2 text-mist">
                       {p.reasons.length > 0 ? p.reasons.join("; ") : "-"}
                     </td>
                   </tr>
                 ))}
                 {data.fleet.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                    <td colSpan={5} className="px-4 py-6 text-center text-mist">
                       No plants found.
                     </td>
                   </tr>

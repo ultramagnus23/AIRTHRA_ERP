@@ -81,25 +81,25 @@ export default function MaterialsPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Materials</h1>
-          <p className="text-sm text-slate-500">density_kg_m3 / rate_per_kg drive the BOM weight/cost calculator.</p>
+          <h1 className="font-display text-2xl font-light text-fg">Materials</h1>
+          <p className="text-sm text-mist">density_kg_m3 / rate_per_kg drive the BOM weight/cost calculator.</p>
         </div>
-        <button onClick={() => setShowForm((s) => !s)} className="rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800">
+        <button onClick={() => setShowForm((s) => !s)} className="rounded-lg bg-rust px-3 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper">
           {showForm ? "Cancel" : "+ New material"}
         </button>
       </div>
 
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-6 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-5">
+        <form onSubmit={handleCreate} className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-hair bg-panel p-4 sm:grid-cols-5" style={{ boxShadow: "var(--shadow-sm)" }}>
           <Field label="Name *" value={form.name} onChange={(v) => setForm({ ...form, name: v })} required />
           <Field label="Grade" value={form.grade} onChange={(v) => setForm({ ...form, grade: v })} />
           <Field label="Density (kg/m3)" value={form.density_kg_m3} onChange={(v) => setForm({ ...form, density_kg_m3: v })} type="number" />
           <Field label="Rate (per kg)" value={form.rate_per_kg} onChange={(v) => setForm({ ...form, rate_per_kg: v })} type="number" />
           <Field label="HSN" value={form.hsn} onChange={(v) => setForm({ ...form, hsn: v })} />
           <div className="sm:col-span-5">
-            <button type="submit" disabled={saving} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+            <button type="submit" disabled={saving} className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">
               {saving ? "Saving..." : "Create material"}
             </button>
           </div>
@@ -107,11 +107,11 @@ export default function MaterialsPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading...</p>
+        <p className="text-sm text-mist">Loading...</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-hair bg-panel" style={{ boxShadow: "var(--shadow-sm)" }}>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="font-mono text-xs tracking-[0.1em] text-mist uppercase">
               <tr>
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Grade</th>
@@ -124,26 +124,26 @@ export default function MaterialsPage() {
             <tbody>
               {materials.map((m) =>
                 editId === m.id ? (
-                  <tr key={m.id} className="border-t border-slate-100 bg-teal-50/40">
-                    <td className="px-3 py-2"><input className="w-full rounded border border-slate-300 px-2 py-1" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></td>
-                    <td className="px-3 py-2"><input className="w-full rounded border border-slate-300 px-2 py-1" value={editForm.grade} onChange={(e) => setEditForm({ ...editForm, grade: e.target.value })} /></td>
-                    <td className="px-3 py-2"><input className="w-24 rounded border border-slate-300 px-2 py-1" value={editForm.density_kg_m3} onChange={(e) => setEditForm({ ...editForm, density_kg_m3: e.target.value })} /></td>
-                    <td className="px-3 py-2"><input className="w-24 rounded border border-slate-300 px-2 py-1" value={editForm.rate_per_kg} onChange={(e) => setEditForm({ ...editForm, rate_per_kg: e.target.value })} /></td>
-                    <td className="px-3 py-2"><input className="w-20 rounded border border-slate-300 px-2 py-1" value={editForm.hsn} onChange={(e) => setEditForm({ ...editForm, hsn: e.target.value })} /></td>
+                  <tr key={m.id} className="border-t border-hair bg-midnight">
+                    <td className="px-3 py-2"><input className="w-full rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></td>
+                    <td className="px-3 py-2"><input className="w-full rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.grade} onChange={(e) => setEditForm({ ...editForm, grade: e.target.value })} /></td>
+                    <td className="px-3 py-2"><input className="w-24 rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.density_kg_m3} onChange={(e) => setEditForm({ ...editForm, density_kg_m3: e.target.value })} /></td>
+                    <td className="px-3 py-2"><input className="w-24 rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.rate_per_kg} onChange={(e) => setEditForm({ ...editForm, rate_per_kg: e.target.value })} /></td>
+                    <td className="px-3 py-2"><input className="w-20 rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.hsn} onChange={(e) => setEditForm({ ...editForm, hsn: e.target.value })} /></td>
                     <td className="space-x-2 px-3 py-2 whitespace-nowrap">
-                      <button onClick={() => saveEdit(m.id)} disabled={saving} className="text-teal-700 hover:underline">Save</button>
-                      <button onClick={() => setEditId(null)} className="text-slate-500 hover:underline">Cancel</button>
+                      <button onClick={() => saveEdit(m.id)} disabled={saving} className="text-copper hover:underline">Save</button>
+                      <button onClick={() => setEditId(null)} className="text-mist hover:underline">Cancel</button>
                     </td>
                   </tr>
                 ) : (
-                  <tr key={m.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2 font-medium text-slate-900">{m.name}</td>
-                    <td className="px-3 py-2 text-slate-600">{m.grade || "-"}</td>
-                    <td className="px-3 py-2 text-slate-600">{m.density_kg_m3 ?? "-"}</td>
-                    <td className="px-3 py-2 text-slate-600">{m.rate_per_kg ?? "-"}</td>
-                    <td className="px-3 py-2 text-slate-600">{m.hsn || "-"}</td>
+                  <tr key={m.id} className="border-t border-hair hover:bg-midnight">
+                    <td className="px-3 py-2 font-medium text-fg">{m.name}</td>
+                    <td className="px-3 py-2 text-mist">{m.grade || "-"}</td>
+                    <td className="px-3 py-2 font-mono text-mist">{m.density_kg_m3 ?? "-"}</td>
+                    <td className="px-3 py-2 font-mono text-mist">{m.rate_per_kg ?? "-"}</td>
+                    <td className="px-3 py-2 font-mono text-mist">{m.hsn || "-"}</td>
                     <td className="px-3 py-2 text-right">
-                      <button onClick={() => startEdit(m)} className="text-teal-700 hover:underline">Edit</button>
+                      <button onClick={() => startEdit(m)} className="text-copper hover:underline">Edit</button>
                     </td>
                   </tr>
                 ),
@@ -161,13 +161,13 @@ function Field({
 }: { label: string; value: string; onChange: (v: string) => void; className?: string; type?: string; required?: boolean }) {
   return (
     <label className={`block text-sm ${className ?? ""}`}>
-      <span className="mb-1 block font-medium text-slate-700">{label}</span>
+      <span className="mb-1 block font-medium text-fg">{label}</span>
       <input
         type={type}
         required={required}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+        className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none"
       />
     </label>
   );

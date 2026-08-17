@@ -101,21 +101,21 @@ export default function VendorsPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Vendors</h1>
-          <p className="text-sm text-slate-500">Master data for PO/GST logic. State code drives CGST+SGST vs IGST.</p>
+          <h1 className="font-display text-2xl font-light text-fg">Vendors</h1>
+          <p className="text-sm text-mist">Master data for PO/GST logic. State code drives CGST+SGST vs IGST.</p>
         </div>
         <button
           onClick={() => setShowForm((s) => !s)}
-          className="rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800"
+          className="rounded-lg bg-rust px-3 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper"
         >
           {showForm ? "Cancel" : "+ New vendor"}
         </button>
       </div>
 
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-6 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-3">
+        <form onSubmit={handleCreate} className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-hair bg-panel p-4 sm:grid-cols-3" style={{ boxShadow: "var(--shadow-sm)" }}>
           <Field label="Name *" value={form.name} onChange={(v) => setForm({ ...form, name: v })} required />
           <Field label="GSTIN" value={form.gstin} onChange={(v) => setForm({ ...form, gstin: v })} />
           <StateSelect value={form.state_code} onChange={(v) => setForm({ ...form, state_code: v })} />
@@ -127,7 +127,7 @@ export default function VendorsPage() {
           <Field label="Rating (1-5)" value={form.rating} onChange={(v) => setForm({ ...form, rating: v })} type="number" />
           <Field label="Notes" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} className="sm:col-span-3" />
           <div className="sm:col-span-3">
-            <button type="submit" disabled={saving} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+            <button type="submit" disabled={saving} className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">
               {saving ? "Saving..." : "Create vendor"}
             </button>
           </div>
@@ -135,13 +135,13 @@ export default function VendorsPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading...</p>
+        <p className="text-sm text-mist">Loading...</p>
       ) : vendors.length === 0 ? (
-        <p className="text-sm text-slate-500">No vendors yet.</p>
+        <p className="text-sm text-mist">No vendors yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-hair bg-panel" style={{ boxShadow: "var(--shadow-sm)" }}>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="font-mono text-xs tracking-[0.1em] text-mist uppercase">
               <tr>
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">GSTIN</th>
@@ -155,33 +155,33 @@ export default function VendorsPage() {
             <tbody>
               {vendors.map((v) =>
                 editId === v.id ? (
-                  <tr key={v.id} className="border-t border-slate-100 bg-teal-50/40">
-                    <td className="px-3 py-2"><input className="w-full rounded border border-slate-300 px-2 py-1" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></td>
-                    <td className="px-3 py-2"><input className="w-full rounded border border-slate-300 px-2 py-1" value={editForm.gstin} onChange={(e) => setEditForm({ ...editForm, gstin: e.target.value })} /></td>
+                  <tr key={v.id} className="border-t border-hair bg-midnight">
+                    <td className="px-3 py-2"><input className="w-full rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></td>
+                    <td className="px-3 py-2"><input className="w-full rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.gstin} onChange={(e) => setEditForm({ ...editForm, gstin: e.target.value })} /></td>
                     <td className="px-3 py-2">
-                      <select className="w-full rounded border border-slate-300 px-2 py-1" value={editForm.state_code} onChange={(e) => setEditForm({ ...editForm, state_code: e.target.value })}>
-                        <option value="">--</option>
-                        {Object.entries(STATE_CODES).map(([code, name]) => <option key={code} value={code}>{code} - {name}</option>)}
+                      <select className="w-full rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.state_code} onChange={(e) => setEditForm({ ...editForm, state_code: e.target.value })}>
+                        <option value="" className="bg-panel">--</option>
+                        {Object.entries(STATE_CODES).map(([code, name]) => <option key={code} value={code} className="bg-panel">{code} - {name}</option>)}
                       </select>
                     </td>
-                    <td className="px-3 py-2"><input className="w-full rounded border border-slate-300 px-2 py-1" value={editForm.contact} onChange={(e) => setEditForm({ ...editForm, contact: e.target.value })} /></td>
-                    <td className="px-3 py-2"><input className="w-full rounded border border-slate-300 px-2 py-1" value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} /></td>
-                    <td className="px-3 py-2"><input className="w-16 rounded border border-slate-300 px-2 py-1" value={editForm.rating} onChange={(e) => setEditForm({ ...editForm, rating: e.target.value })} /></td>
+                    <td className="px-3 py-2"><input className="w-full rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.contact} onChange={(e) => setEditForm({ ...editForm, contact: e.target.value })} /></td>
+                    <td className="px-3 py-2"><input className="w-full rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} /></td>
+                    <td className="px-3 py-2"><input className="w-16 rounded-lg border border-line bg-transparent px-2 py-1 text-fg focus:border-copper focus:outline-none" value={editForm.rating} onChange={(e) => setEditForm({ ...editForm, rating: e.target.value })} /></td>
                     <td className="space-x-2 px-3 py-2 whitespace-nowrap">
-                      <button onClick={() => saveEdit(v.id)} disabled={saving} className="text-teal-700 hover:underline">Save</button>
-                      <button onClick={() => setEditId(null)} className="text-slate-500 hover:underline">Cancel</button>
+                      <button onClick={() => saveEdit(v.id)} disabled={saving} className="text-copper hover:underline">Save</button>
+                      <button onClick={() => setEditId(null)} className="text-mist hover:underline">Cancel</button>
                     </td>
                   </tr>
                 ) : (
-                  <tr key={v.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2 font-medium text-slate-900">{v.name}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-slate-600">{v.gstin || "-"}</td>
-                    <td className="px-3 py-2 text-slate-600">{v.state_code ? `${v.state_code} - ${STATE_CODES[v.state_code] ?? ""}` : "-"}</td>
-                    <td className="px-3 py-2 text-slate-600">{v.contact || v.phone || "-"}</td>
-                    <td className="px-3 py-2 text-slate-600">{v.category || "-"}</td>
-                    <td className="px-3 py-2 text-slate-600">{v.rating ?? "-"}</td>
+                  <tr key={v.id} className="border-t border-hair hover:bg-midnight">
+                    <td className="px-3 py-2 font-medium text-fg">{v.name}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-mist">{v.gstin || "-"}</td>
+                    <td className="px-3 py-2 text-mist">{v.state_code ? `${v.state_code} - ${STATE_CODES[v.state_code] ?? ""}` : "-"}</td>
+                    <td className="px-3 py-2 text-mist">{v.contact || v.phone || "-"}</td>
+                    <td className="px-3 py-2 text-mist">{v.category || "-"}</td>
+                    <td className="px-3 py-2 font-mono text-mist">{v.rating ?? "-"}</td>
                     <td className="px-3 py-2 text-right">
-                      <button onClick={() => startEdit(v)} className="text-teal-700 hover:underline">Edit</button>
+                      <button onClick={() => startEdit(v)} className="text-copper hover:underline">Edit</button>
                     </td>
                   </tr>
                 ),
@@ -199,13 +199,13 @@ function Field({
 }: { label: string; value: string; onChange: (v: string) => void; className?: string; type?: string; required?: boolean }) {
   return (
     <label className={`block text-sm ${className ?? ""}`}>
-      <span className="mb-1 block font-medium text-slate-700">{label}</span>
+      <span className="mb-1 block font-medium text-fg">{label}</span>
       <input
         type={type}
         required={required}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+        className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none"
       />
     </label>
   );
@@ -214,11 +214,11 @@ function Field({
 function StateSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <label className="block text-sm">
-      <span className="mb-1 block font-medium text-slate-700">State code (GST)</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-        <option value="">-- select --</option>
+      <span className="mb-1 block font-medium text-fg">State code (GST)</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+        <option value="" className="bg-panel">-- select --</option>
         {Object.entries(STATE_CODES).map(([code, name]) => (
-          <option key={code} value={code}>{code} - {name}</option>
+          <option key={code} value={code} className="bg-panel">{code} - {name}</option>
         ))}
       </select>
     </label>

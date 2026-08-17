@@ -37,6 +37,7 @@ from .routers import (
     erp_boms,
     erp_drawings,
     erp_grn,
+    erp_hardware,
     erp_invoices,
     erp_materials,
     erp_pos,
@@ -101,6 +102,7 @@ app.include_router(erp_boms.router)
 app.include_router(erp_pos.router)
 app.include_router(erp_grn.router)
 app.include_router(erp_invoices.router)
+app.include_router(erp_hardware.router)
 
 # P6 - genealogy, production/QC, logistics, Tally export
 app.include_router(genealogy.router)

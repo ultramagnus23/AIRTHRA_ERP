@@ -44,20 +44,20 @@ export default function LogisticsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Logistics urgency</h1>
-        <p className="text-sm text-slate-600">
+        <h1 className="font-display text-2xl font-light text-fg">Logistics urgency</h1>
+        <p className="text-sm text-mist">
           GET /admin/logistics/burn_rates - {data ? data.method : "OLS trend of KOH tank level over the trailing window"}.
         </p>
       </div>
 
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-slate-600">Sort by:</span>
+        <span className="font-mono text-xs tracking-[0.1em] text-mist uppercase">Sort by:</span>
         {(["days_remaining", "fill_pct", "name"] as SortKey[]).map((k) => (
           <button
             key={k}
             onClick={() => setSortKey(k)}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-              sortKey === k ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150 ${
+              sortKey === k ? "bg-rust text-fg" : "bg-midnight text-mist hover:text-fg"
             }`}
           >
             {k === "days_remaining" ? "KOH days remaining" : k === "fill_pct" ? "K2SO3 fill %" : "Plant"}
@@ -65,13 +65,16 @@ export default function LogisticsPage() {
         ))}
       </div>
 
-      {loading && <p className="text-sm text-slate-500">Loading...</p>}
-      {error && <p className="text-sm text-red-700">{error}</p>}
+      {loading && <p className="font-mono text-sm text-mist">Loading...</p>}
+      {error && <p className="text-sm text-rust">{error}</p>}
 
       {data && (
-        <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+        <div
+          className="overflow-x-auto rounded-2xl border border-hair bg-panel"
+          style={{ boxShadow: "var(--shadow-sm)" }}
+        >
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="border-b border-hair font-mono text-xs tracking-[0.1em] text-mist uppercase">
               <tr>
                 <th className="px-4 py-2">Plant</th>
                 <th className="px-4 py-2">KOH level</th>
@@ -85,34 +88,34 @@ export default function LogisticsPage() {
                 const urgent =
                   p.koh.days_remaining !== null && p.koh.days_remaining < URGENT_DAYS_THRESHOLD;
                 return (
-                  <tr key={p.plant_id} className="border-b border-slate-100 last:border-0">
+                  <tr key={p.plant_id} className="border-b border-hair last:border-0">
                     <td className="px-4 py-2">
-                      <div className="font-medium text-slate-900">{p.name}</div>
-                      <div className="font-mono text-xs text-slate-500">{p.plant_id}</div>
+                      <div className="font-medium text-fg">{p.name}</div>
+                      <div className="font-mono text-xs text-mist">{p.plant_id}</div>
                     </td>
-                    <td className="px-4 py-2 text-slate-700">
+                    <td className="px-4 py-2 font-mono text-fg">
                       {p.koh.current_level_pct !== null ? `${p.koh.current_level_pct.toFixed(1)}%` : "-"}
                     </td>
-                    <td className="px-4 py-2 text-slate-700">
+                    <td className="px-4 py-2 font-mono text-fg">
                       {p.koh.trend_pct_per_day !== null ? p.koh.trend_pct_per_day.toFixed(3) : "-"}
                     </td>
                     <td className="px-4 py-2">
                       {p.koh.days_remaining !== null ? (
                         <span
-                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                          className={`inline-flex items-center rounded-md border px-2.5 py-0.5 font-mono text-xs font-medium ${
                             urgent
-                              ? "border-red-300 bg-red-100 text-red-800"
-                              : "border-slate-300 bg-slate-100 text-slate-700"
+                              ? "border-rust/40 bg-rust/10 text-rust"
+                              : "border-line bg-midnight text-mist"
                           }`}
                         >
                           {urgent && "⚠ "}
                           {p.koh.days_remaining.toFixed(1)}d
                         </span>
                       ) : (
-                        <span className="text-xs text-slate-500">{p.koh.reason ?? "n/a"}</span>
+                        <span className="font-mono text-xs text-mist">{p.koh.reason ?? "n/a"}</span>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-slate-700">
+                    <td className="px-4 py-2 font-mono text-fg">
                       {p.k2so3.fill_pct !== null ? `${p.k2so3.fill_pct.toFixed(1)}%` : "-"}
                     </td>
                   </tr>

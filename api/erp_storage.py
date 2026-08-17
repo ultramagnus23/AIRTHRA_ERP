@@ -80,10 +80,3 @@ def upload_bytes(key: str, data: bytes, content_type: str) -> dict:
 
     url = f"{MINIO_ENDPOINT}/{MINIO_BUCKET}/{key}"
     return {"url": url, "sha256": sha256, "bytes": len(data)}
-
-
-def delete_key(key: str) -> None:
-    try:
-        _client().delete_object(Bucket=MINIO_BUCKET, Key=key)
-    except Exception:  # noqa: BLE001 - best-effort cleanup only
-        pass

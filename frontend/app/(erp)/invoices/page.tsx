@@ -52,54 +52,54 @@ export default function InvoicesPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Vendor Invoices</h1>
-          <p className="text-sm text-slate-500">3-way match against PO + GRN before approval.</p>
+          <h1 className="font-display text-2xl font-light text-fg">Vendor Invoices</h1>
+          <p className="text-sm text-mist">3-way match against PO + GRN before approval.</p>
         </div>
-        <button onClick={() => setShowForm((s) => !s)} className="rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800">
+        <button onClick={() => setShowForm((s) => !s)} className="rounded-lg bg-rust px-3 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper">
           {showForm ? "Cancel" : "+ Record invoice"}
         </button>
       </div>
 
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="mb-6 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4">
+        <form onSubmit={handleCreate} className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-hair bg-panel p-4 sm:grid-cols-4" style={{ boxShadow: "var(--shadow-sm)" }}>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Vendor *</span>
-            <select required value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">-- select --</option>
-              {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            <span className="mb-1 block font-medium text-fg">Vendor *</span>
+            <select required value={form.vendor_id} onChange={(e) => setForm({ ...form, vendor_id: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+              <option value="" className="bg-panel">-- select --</option>
+              {vendors.map((v) => <option key={v.id} value={v.id} className="bg-panel">{v.name}</option>)}
             </select>
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Linked PO</span>
-            <select value={form.po_id} onChange={(e) => setForm({ ...form, po_id: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">-- none (match will fail) --</option>
-              {pos.filter((p) => !form.vendor_id || p.vendor_id === form.vendor_id).map((p) => <option key={p.id} value={p.id}>{p.po_no}</option>)}
+            <span className="mb-1 block font-medium text-fg">Linked PO</span>
+            <select value={form.po_id} onChange={(e) => setForm({ ...form, po_id: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+              <option value="" className="bg-panel">-- none (match will fail) --</option>
+              {pos.filter((p) => !form.vendor_id || p.vendor_id === form.vendor_id).map((p) => <option key={p.id} value={p.id} className="bg-panel">{p.po_no}</option>)}
             </select>
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Invoice no. *</span>
-            <input required value={form.inv_no} onChange={(e) => setForm({ ...form, inv_no: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">Invoice no. *</span>
+            <input required value={form.inv_no} onChange={(e) => setForm({ ...form, inv_no: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Date</span>
-            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">Date</span>
+            <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none" />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Taxable *</span>
-            <input required type="number" value={form.taxable} onChange={(e) => setForm({ ...form, taxable: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">Taxable *</span>
+            <input required type="number" value={form.taxable} onChange={(e) => setForm({ ...form, taxable: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">GST *</span>
-            <input required type="number" value={form.gst} onChange={(e) => setForm({ ...form, gst: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">GST *</span>
+            <input required type="number" value={form.gst} onChange={(e) => setForm({ ...form, gst: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Total *</span>
-            <input required type="number" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">Total *</span>
+            <input required type="number" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
           </label>
           <div className="sm:col-span-4">
-            <button type="submit" disabled={saving} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+            <button type="submit" disabled={saving} className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">
               {saving ? "Saving..." : "Record invoice"}
             </button>
           </div>
@@ -107,22 +107,22 @@ export default function InvoicesPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading...</p>
+        <p className="text-sm text-mist">Loading...</p>
       ) : invoices.length === 0 ? (
-        <p className="text-sm text-slate-500">No vendor invoices yet.</p>
+        <p className="text-sm text-mist">No vendor invoices yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-hair bg-panel" style={{ boxShadow: "var(--shadow-sm)" }}>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+            <thead className="font-mono text-xs tracking-[0.1em] text-mist uppercase">
               <tr><th className="px-3 py-2">Invoice no.</th><th className="px-3 py-2">Vendor</th><th className="px-3 py-2">PO</th><th className="px-3 py-2">Total</th><th className="px-3 py-2">Status</th></tr>
             </thead>
             <tbody>
               {invoices.map((inv) => (
-                <tr key={inv.id} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-2"><Link href={`/invoices/${inv.id}`} className="font-medium text-teal-700 hover:underline">{inv.inv_no}</Link></td>
-                  <td className="px-3 py-2 text-slate-600">{vendorById.get(inv.vendor_id)?.name ?? inv.vendor_id}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-600">{inv.po_id ? (poById.get(inv.po_id)?.po_no ?? inv.po_id) : "-"}</td>
-                  <td className="px-3 py-2 text-slate-600">₹{inv.total}</td>
+                <tr key={inv.id} className="border-t border-hair hover:bg-midnight">
+                  <td className="px-3 py-2"><Link href={`/invoices/${inv.id}`} className="font-medium text-copper hover:underline">{inv.inv_no}</Link></td>
+                  <td className="px-3 py-2 text-mist">{vendorById.get(inv.vendor_id)?.name ?? inv.vendor_id}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-mist">{inv.po_id ? (poById.get(inv.po_id)?.po_no ?? inv.po_id) : "-"}</td>
+                  <td className="px-3 py-2 font-mono text-mist">₹{inv.total}</td>
                   <td className="px-3 py-2"><StatusBadge status={inv.status} /></td>
                 </tr>
               ))}
@@ -135,9 +135,11 @@ export default function InvoicesPage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    received: "bg-slate-100 text-slate-700", matched: "bg-blue-100 text-blue-800",
-    approved: "bg-green-100 text-green-800", paid: "bg-teal-100 text-teal-800",
+  const styles: Record<string, string> = {
+    received: "border border-line text-mist",
+    matched: "border border-moss text-moss",
+    approved: "border border-moss text-moss",
+    paid: "border border-moss text-moss",
   };
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors[status] ?? "bg-slate-100"}`}>{status}</span>;
+  return <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${styles[status] ?? "border border-line text-mist"}`}>{status}</span>;
 }

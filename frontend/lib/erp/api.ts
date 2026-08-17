@@ -14,6 +14,7 @@ import type {
   FabricationJobStatus,
   GenealogyResponse,
   Grn,
+  HardwareComponent,
   InventoryLot,
   MatchResult,
   Material,
@@ -78,6 +79,14 @@ export const listMaterials = () => get<Material[]>("/erp/materials");
 export const getMaterial = (id: string) => get<Material>(`/erp/materials/${id}`);
 export const createMaterial = (body: Partial<Material>) => post<Material>("/erp/materials", body);
 export const updateMaterial = (id: string, body: Partial<Material>) => patch<Material>(`/erp/materials/${id}`, body);
+
+// --- Hardware components (edge-unit electrical/instrumentation BOM) ------
+export const listHardwareComponents = () => get<HardwareComponent[]>("/erp/hardware-components");
+export const createHardwareComponent = (body: Partial<HardwareComponent>) =>
+  post<HardwareComponent>("/erp/hardware-components", body);
+export const updateHardwareComponent = (id: string, body: Partial<HardwareComponent>) =>
+  patch<HardwareComponent>(`/erp/hardware-components/${id}`, body);
+export const deleteHardwareComponent = (id: string) => del(`/erp/hardware-components/${id}`);
 
 // --- Quotations ------------------------------------------------------------
 export const listQuotations = () => get<Quotation[]>("/erp/quotations");
