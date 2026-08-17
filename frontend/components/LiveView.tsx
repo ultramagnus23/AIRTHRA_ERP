@@ -146,12 +146,13 @@ export default function LiveView({
                     {sensors.length} instrument{sensors.length === 1 ? "" : "s"}
                   </span>
                 </h2>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {sensors.map((s) => {
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-4">
+                  {sensors.map((s, i) => {
                     const r = byId(s.sensor_id);
                     return (
                       <SensorTile
                         key={s.sensor_id}
+                        index={i}
                         label={s.label}
                         unit={s.unit}
                         value={r?.value ?? null}

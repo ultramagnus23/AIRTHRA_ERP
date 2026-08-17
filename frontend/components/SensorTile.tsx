@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import FlagBadge from "./FlagBadge";
 import { qualityInfo } from "@/lib/quality";
@@ -33,6 +34,7 @@ export default function SensorTile({
   purpose,
   threshold,
   note,
+  index = 0,
 }: {
   label: string;
   unit: string;
@@ -54,9 +56,26 @@ export default function SensorTile({
   threshold?: string | null;
   /** Divergence between this platform's sensor and the FEED register. */
   note?: string;
+  /** Position in the grid, for the staggered entrance cascade. */
+  index?: number;
 }) {
   const info = flag !== null ? qualityInfo(flag) : null;
   const isGood = info?.isGood ?? true;
+
+  // Pulse the readout when a new value actually lands, so liveness is
+  // visible at a glance rather than only in the timestamp. Keyed on the
+  // value itself: a re-render that doesn't change the reading must not
+  // blip, or the pulse stops meaning "fresh data".
+  const [blip, setBlip] = useState(false);
+  const prevValue = useRef(value);
+  useEffect(() => {
+    const changed = prevValue.current !== value && prevValue.current !== null;
+    prevValue.current = value;
+    if (!changed) return;
+    setBlip(true);
+    const t = setTimeout(() => setBlip(false), 900);
+    return () => clearTimeout(t);
+  }, [value]);
 
   const inNormal =
     range && value !== null ? value >= range.normal[0] && value <= range.normal[1] : null;
@@ -68,10 +87,13 @@ export default function SensorTile({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border p-4 transition-colors duration-150 ${
+      className={`air-rise air-lift relative overflow-hidden rounded-2xl border p-4 hover:border-line ${
         isGood ? "border-hair bg-panel" : "border-line bg-midnight"
       }`}
-      style={{ boxShadow: "var(--shadow-sm)" }}
+      style={{
+        boxShadow: "var(--shadow-sm)",
+        animationDelay: `calc(var(--stagger) * ${index})`,
+      }}
     >
       <div
         className="absolute inset-x-0 top-0 h-[2px]"
@@ -94,7 +116,7 @@ export default function SensorTile({
         {flag !== null && <FlagBadge flag={flag} />}
       </div>
       <div
-        className={`mt-2 font-mono text-2xl font-medium tabular-nums ${
+        className={`${blip ? "air-blip" : ""} mt-2 -mx-1 rounded px-1 font-mono text-2xl font-medium tabular-nums ${
           isGood ? "text-fg" : "text-mist"
         }`}
       >

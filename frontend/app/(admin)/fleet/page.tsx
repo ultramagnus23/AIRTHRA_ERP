@@ -105,11 +105,14 @@ export default function FleetPage() {
               </thead>
               <tbody>
                 {data.fleet.map((p: FleetEntry) => (
-                  <tr key={p.plant_id} className="border-b border-hair last:border-0">
+                  <tr
+                    key={p.plant_id}
+                    className="border-b border-hair transition-colors duration-[var(--dur-fast)] last:border-0 hover:bg-midnight/60"
+                  >
                     <td className="px-4 py-2">
                       <Link
                         href={`/${p.plant_id}`}
-                        className="font-medium text-fg underline decoration-line hover:text-copper hover:decoration-copper"
+                        className="air-track inline-block font-medium text-fg underline decoration-line hover:text-copper hover:decoration-copper"
                         title="Open this plant's live view (remote debugging)"
                       >
                         {p.name}

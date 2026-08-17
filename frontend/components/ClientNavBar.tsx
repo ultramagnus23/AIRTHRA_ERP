@@ -47,7 +47,7 @@ export default function ClientNavBar({
       <Link
         key={tab.href}
         href={href}
-        className={`relative rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-150 ${
+        className={`air-track relative rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap ${
           active ? "text-fg" : "text-mist hover:text-fg"
         }`}
       >
@@ -121,9 +121,19 @@ export default function ClientNavBar({
       </header>
 
       {/* mobile: full tab row beneath the pill, since the pill itself
-          hides tabs below md to keep the centered wordmark from crowding */}
-      <nav className="mt-2 flex justify-center gap-1 overflow-x-auto md:hidden">
-        {[...LEFT_TABS, ...RIGHT_TABS].map(tabLink)}
+          hides tabs below md to keep the centered wordmark from crowding.
+          Edge-to-edge scroll with the scrollbar hidden and inertial
+          snapping - a visible native scrollbar bleeding across the bar
+          was the exact thing that made this look broken before. */}
+      <nav
+        className="air-scroll mt-2 flex snap-x snap-mandatory gap-1 overflow-x-auto px-1 md:hidden"
+        aria-label="Plant sections"
+      >
+        {[...LEFT_TABS, ...RIGHT_TABS].map((t) => (
+          <span key={t.href} className="snap-start">
+            {tabLink(t)}
+          </span>
+        ))}
       </nav>
     </div>
   );
