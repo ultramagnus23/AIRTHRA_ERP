@@ -56,7 +56,7 @@ export function qualityInfo(
     isGood,
     label: TEXT_LABELS[norm],
     badgeClass: isGood
-      ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-      : "text-slate-500 bg-slate-100 border-slate-300",
+      ? "text-moss bg-transparent border-line"
+      : "text-mist bg-panel border-line",
   };
 }

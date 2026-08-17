@@ -36,51 +36,52 @@ export default function EventForm({ plantId }: { plantId: string }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:flex-row sm:items-end"
+      className="flex flex-col gap-3 rounded-2xl border border-hair bg-panel p-4 sm:flex-row sm:items-end"
+      style={{ boxShadow: "var(--shadow-sm)" }}
     >
       <div>
-        <label className="block text-xs font-medium text-slate-600">Kind</label>
+        <label className="block text-xs font-medium text-mist">Kind</label>
         <select
           value={kind}
           onChange={(e) => setKind(e.target.value as EventKind)}
-          className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          className="rounded-lg border border-line bg-transparent px-2 py-1.5 text-sm text-fg focus:border-copper focus:outline-none"
         >
           {KINDS.map((k) => (
-            <option key={k} value={k}>
+            <option key={k} value={k} className="bg-panel">
               {k}
             </option>
           ))}
         </select>
       </div>
       <div className="flex-1">
-        <label className="block text-xs font-medium text-slate-600">Note</label>
+        <label className="block text-xs font-medium text-mist">Note</label>
         <input
           type="text"
           required
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="What happened?"
-          className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          className="w-full rounded-lg border border-line bg-transparent px-2 py-1.5 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none"
         />
       </div>
       <div className="w-28">
-        <label className="block text-xs font-medium text-slate-600">Quantity (optional)</label>
+        <label className="block text-xs font-medium text-mist">Quantity (optional)</label>
         <input
           type="number"
           value={quantity}
           onChange={(e) => setQuantity(e.target.value)}
-          className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          className="w-full rounded-lg border border-line bg-transparent px-2 py-1.5 font-mono text-sm text-fg focus:border-copper focus:outline-none"
         />
       </div>
       <button
         type="submit"
         disabled={busy}
-        className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+        className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50"
       >
-        {busy ? "Logging..." : "Log event"}
+        {busy ? "Logging…" : "Log event"}
       </button>
-      {status && <span className="text-sm text-emerald-700">{status}</span>}
-      {error && <span className="text-sm text-red-700">{error}</span>}
+      {status && <span className="text-sm text-moss">{status}</span>}
+      {error && <span className="text-sm text-rust">{error}</span>}
     </form>
   );
 }

@@ -74,10 +74,10 @@ export default function ComplianceView({ plantId }: { plantId: string }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-slate-700">KPIs (last 24h)</h2>
-        {kpiError && <p className="text-sm text-red-700">{kpiError}</p>}
+        <h2 className="mb-3 font-mono text-xs tracking-[0.15em] text-mist uppercase">KPIs (last 24h)</h2>
+        {kpiError && <p className="text-sm text-rust">{kpiError}</p>}
         {kpis && kpiNames.length === 0 && (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-mist">
             No KPI rows for this window yet (P3&apos;s kpi_worker writes so2_removal_efficiency and
             mass_balance_closure — literal SO2-kg-removed / K2SO3-kg / uptime% figures live in the
             billing worker&apos;s invoices table, which has no client-facing read endpoint yet).
@@ -90,20 +90,29 @@ export default function ComplianceView({ plantId }: { plantId: string }) {
             return (
               <div
                 key={name}
-                className={`rounded-lg border p-4 ${
-                  info.isGood ? "border-slate-200 bg-white" : "border-slate-300 bg-slate-100"
+                className={`relative overflow-hidden rounded-2xl border p-4 ${
+                  info.isGood ? "border-hair bg-panel" : "border-line bg-midnight"
                 }`}
+                style={{ boxShadow: "var(--shadow-sm)" }}
               >
-                <div className="text-sm font-medium text-slate-600">{friendlyKpiName(name)}</div>
-                <div className={`mt-1 text-2xl font-semibold ${info.isGood ? "text-slate-900" : "text-slate-500"}`}>
+                <div
+                  className="absolute inset-x-0 top-0 h-[2px]"
+                  style={{ background: "oklch(0.72 0.15 54 / 0.55)" }}
+                  aria-hidden
+                />
+                <div className="flex items-center gap-1.5 font-mono text-xs tracking-[0.08em] text-mist uppercase">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-copper" aria-hidden />
+                  {friendlyKpiName(name)}
+                </div>
+                <div className={`mt-2 font-mono text-2xl font-medium ${info.isGood ? "text-fg" : "text-mist"}`}>
                   {k.value === null ? "—" : k.value.toFixed(2)}
                   {!info.isGood && (
-                    <span className="ml-2 align-middle text-xs font-normal text-slate-500">
+                    <span className="ml-2 align-middle text-xs font-normal text-mist">
                       ({info.label})
                     </span>
                   )}
                 </div>
-                <div className="mt-1 text-[11px] text-slate-400">
+                <div className="mt-1 font-mono text-[11px] text-mist">
                   {new Date(k.ts).toLocaleString()}
                 </div>
               </div>
@@ -112,29 +121,47 @@ export default function ComplianceView({ plantId }: { plantId: string }) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="mb-1 text-sm font-semibold text-slate-700">
+      <div className="rounded-2xl border border-hair bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
+        <h2 className="mb-1 font-mono text-xs tracking-[0.15em] text-mist uppercase">
           Stack SO2 (ppm) vs. limit — last 24h
         </h2>
-        <p className="mb-2 text-xs text-slate-500">
+        <p className="mb-3 font-mono text-[11px] text-mist">
           Limit line is a hardcoded placeholder ({SO2_STACK_LIMIT_PPM} ppm) — the schema has no
-          per-plant regulatory limit field to pull from yet. See ComplianceView.tsx.
+          per-plant regulatory limit field to pull from yet.
         </p>
-        {stackError && <p className="text-sm text-red-700">{stackError}</p>}
+        {stackError && <p className="text-sm text-rust">{stackError}</p>}
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={stackRows ?? []}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="ts" tickFormatter={(v) => new Date(v).toLocaleTimeString()} fontSize={11} minTickGap={40} />
-              <YAxis fontSize={11} />
-              <Tooltip labelFormatter={(v) => new Date(String(v)).toLocaleString()} />
+              <CartesianGrid stroke="var(--color-hair)" vertical={false} />
+              <XAxis
+                dataKey="ts"
+                tickFormatter={(v) => new Date(v).toLocaleTimeString()}
+                fontSize={10}
+                fontFamily="var(--font-mono)"
+                stroke="var(--color-mist)"
+                minTickGap={40}
+                tickLine={false}
+                axisLine={{ stroke: "var(--color-line)" }}
+              />
+              <YAxis fontSize={10} fontFamily="var(--font-mono)" stroke="var(--color-mist)" tickLine={false} axisLine={false} />
+              <Tooltip
+                labelFormatter={(v) => new Date(String(v)).toLocaleString()}
+                contentStyle={{
+                  background: "var(--color-midnight)",
+                  border: "1px solid var(--color-line)",
+                  borderRadius: 8,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12,
+                }}
+              />
               <ReferenceLine
                 y={SO2_STACK_LIMIT_PPM}
-                stroke="#dc2626"
+                stroke="var(--color-rust)"
                 strokeDasharray="4 4"
-                label={{ value: "Limit", position: "insideTopRight", fill: "#dc2626", fontSize: 11 }}
+                label={{ value: "Limit", position: "insideTopRight", fill: "var(--color-rust)", fontSize: 11 }}
               />
-              <Line type="monotone" dataKey="value" stroke="#0ea5e9" dot={false} connectNulls isAnimationActive={false} />
+              <Line type="monotone" dataKey="value" stroke="var(--color-copper)" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -144,7 +171,7 @@ export default function ComplianceView({ plantId }: { plantId: string }) {
         <button
           disabled
           title="Not yet wired: there is no backend PDF-export endpoint for the client compliance view (POST /admin/mrv_export/{plant_id} exists but is global_admin-only and would 403 a tenant_read user)."
-          className="cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-400"
+          className="cursor-not-allowed rounded-lg border border-line bg-panel px-4 py-2 text-sm font-medium text-mist"
         >
           Generate inspector PDF (coming soon)
         </button>

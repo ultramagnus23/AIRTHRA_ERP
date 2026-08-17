@@ -6,6 +6,7 @@ import { connectPlantWs } from "@/lib/ws";
 import { SENSOR_MANIFEST } from "@/lib/types";
 import type { QualityFlagText, QualityFlagWire } from "@/lib/types";
 import SensorTile, { type SparklinePoint } from "./SensorTile";
+import TrendPanel from "./TrendPanel";
 import PidDiagram from "./PidDiagram";
 
 interface SensorState {
@@ -69,36 +70,61 @@ export default function LiveView({ plantId }: { plantId: string }) {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        <span
-          className={`inline-block h-2 w-2 rounded-full ${
-            wsStatus === "open" ? "bg-emerald-500" : wsStatus === "connecting" ? "bg-amber-400" : "bg-red-500"
-          }`}
-        />
-        Live feed: {wsStatus}
-        {error && <span className="text-red-600">— {error}</span>}
+    <div className="flex flex-col gap-8">
+      <div className="flex items-baseline justify-between">
+        <h1 className="font-display text-2xl font-light text-fg">
+          Live
+        </h1>
+        <div className="flex items-center gap-2 font-mono text-xs text-mist">
+          <span
+            className={`inline-block h-1.5 w-1.5 rounded-full ${
+              wsStatus === "open"
+                ? "bg-moss"
+                : wsStatus === "connecting"
+                  ? "bg-copper"
+                  : "bg-rust"
+            }`}
+          />
+          {wsStatus}
+          {error && <span className="text-rust"> — {error}</span>}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {SENSOR_MANIFEST.map((s) => {
-          const r = byId(s.sensor_id);
-          return (
-            <SensorTile
-              key={s.sensor_id}
-              label={s.label}
-              unit={s.unit}
-              value={r?.value ?? null}
-              flag={r?.flag ?? null}
-              ts={r?.ts ?? null}
-              history={history[s.sensor_id] ?? []}
-            />
-          );
-        })}
-      </div>
+      <section>
+        <h2 className="mb-3 font-mono text-xs tracking-[0.15em] text-mist uppercase">
+          Live readings
+        </h2>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {SENSOR_MANIFEST.map((s) => {
+            const r = byId(s.sensor_id);
+            return (
+              <SensorTile
+                key={s.sensor_id}
+                label={s.label}
+                unit={s.unit}
+                value={r?.value ?? null}
+                flag={r?.flag ?? null}
+                ts={r?.ts ?? null}
+                history={history[s.sensor_id] ?? []}
+                range={{ min: s.min, max: s.max, normal: s.normal }}
+                accent={s.accent}
+              />
+            );
+          })}
+        </div>
+      </section>
 
-      <div>
-        <h2 className="mb-2 text-sm font-semibold text-slate-700">Process overview</h2>
+      <section>
+        <h2 className="mb-3 font-mono text-xs tracking-[0.15em] text-mist uppercase">
+          Trend
+        </h2>
+        <TrendPanel inSeries={history.SO2_in ?? []} outSeries={history.SO2_out ?? []} />
+      </section>
+
+      <section>
+        <h2 className="mb-3 font-mono text-xs tracking-[0.15em] text-mist uppercase">
+          Process overview
+        </h2>
         <PidDiagram
           so2In={pidReading("SO2_in", "ppm")}
           so2Out={pidReading("SO2_out", "ppm")}
@@ -108,7 +134,7 @@ export default function LiveView({ plantId }: { plantId: string }) {
           k2so3Level={pidReading("level_K2SO3_tank", "%")}
           flow={pidReading("flow", "m3/h")}
         />
-      </div>
+      </section>
     </div>
   );
 }

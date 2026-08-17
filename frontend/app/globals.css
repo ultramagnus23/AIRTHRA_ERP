@@ -1,26 +1,83 @@
 @import "tailwindcss";
 
+/*
+ * Airthra design tokens — copied verbatim from airthra.com's live CSS
+ * custom properties (extracted via getComputedStyle against the parent
+ * brand site). Single dark-first theme, no light variant, matching the
+ * parent brand's own identity. See DESIGN.md for the full system.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Neutrals, darkest surface -> primary text. Deepened from the
+     parent-brand marketing-site values: a product surface used all
+     day reads more modern noticeably darker/richer than a marketing
+     hero, with more contrast between bg/panel/midnight steps. */
+  --color-bg: oklch(0.105 0.018 246);
+  --color-panel: oklch(0.145 0.02 246);
+  --color-midnight: oklch(0.195 0.024 246);
+  --color-hair: color-mix(in oklch, oklch(0.955 0.014 236) 8%, transparent);
+  --color-line: color-mix(in oklch, oklch(0.955 0.014 236) 16%, transparent);
+  --color-mist: oklch(0.72 0.022 240);
+  --color-cloud: oklch(0.945 0.026 232);
+  --color-fg: oklch(0.965 0.012 236);
+
+  /* Accent: single committed hue, pushed a touch more vivid than the
+     marketing site's own values so it reads assertively on product
+     surfaces (data call-outs, active state, primary actions) rather
+     than receding into the neutrals. */
+  --color-rust: oklch(0.52 0.16 48);
+  --color-copper: oklch(0.72 0.15 54);
+
+  /* Semantic (shares rust/copper above; adds moss + sand) */
+  --color-moss: oklch(0.64 0.1 152);
+  --color-sand: oklch(0.935 0.062 96);
+
+  /* Motion, copied from the parent brand */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-x: cubic-bezier(0.19, 1, 0.22, 1);
+
+  --nav-h: 64px;
+
+  /* Elevation - layered depth. Shadows are warm-tinted (toward the
+     abyss hue), not neutral black, so raised surfaces still read as
+     part of the same world instead of a generic UI-kit drop shadow. */
+  --shadow-sm: 0 1px 2px oklch(0.05 0.02 246 / 0.5);
+  --shadow-md: 0 4px 16px -4px oklch(0.05 0.02 246 / 0.55), 0 1px 2px oklch(0.05 0.02 246 / 0.4);
+  --shadow-lg: 0 16px 48px -12px oklch(0.05 0.02 246 / 0.65), 0 2px 6px oklch(0.05 0.02 246 / 0.4);
+  /* Copper-tinted glow, reserved for hover/focus on interactive
+     surfaces - a modern accent touch, not stamped on static panels. */
+  --shadow-glow: 0 0 0 1px oklch(0.72 0.15 54 / 0.35), 0 8px 24px -6px oklch(0.72 0.15 54 / 0.25);
+
+  /* Glass - reserved for floating chrome (nav) only, not stamped on
+     every panel. See DESIGN.md's "purposeful, not default" rule. */
+  --glass-bg: oklch(0.2 0.024 246 / 0.72);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--color-bg);
+  --color-panel: var(--color-panel);
+  --color-midnight: var(--color-midnight);
+  --color-hair: var(--color-hair);
+  --color-line: var(--color-line);
+  --color-mist: var(--color-mist);
+  --color-cloud: var(--color-cloud);
+  --color-fg: var(--color-fg);
+  --color-rust: var(--color-rust);
+  --color-copper: var(--color-copper);
+  --color-moss: var(--color-moss);
+  --color-sand: var(--color-sand);
+
+  --font-display: var(--font-display), "Times New Roman", serif;
+  --font-body: var(--font-body), "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, "SF Mono", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+::selection {
+  background: var(--color-copper);
+  color: var(--color-bg);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Focus ring, applied consistently instead of the browser default */
+:focus-visible {
+  outline: 2px solid var(--color-copper);
+  outline-offset: 2px;
 }

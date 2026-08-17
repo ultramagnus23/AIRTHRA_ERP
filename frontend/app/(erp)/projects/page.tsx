@@ -94,23 +94,23 @@ export default function ProjectsPage() {
       <div>
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-slate-900">Projects</h1>
-            <p className="text-sm text-slate-500">Parent of drawings/BOMs/tasks.</p>
+            <h1 className="font-display text-2xl font-light text-fg">Projects</h1>
+            <p className="text-sm text-mist">Parent of drawings/BOMs/tasks.</p>
           </div>
-          <button onClick={() => setShowProjectForm((s) => !s)} className="rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800">
+          <button onClick={() => setShowProjectForm((s) => !s)} className="rounded-lg bg-rust px-3 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper">
             {showProjectForm ? "Cancel" : "+ New project"}
           </button>
         </div>
 
-        {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
 
         {showProjectForm && (
-          <form onSubmit={handleCreateProject} className="mb-6 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4">
+          <form onSubmit={handleCreateProject} className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-hair bg-panel p-4 sm:grid-cols-4" style={{ boxShadow: "var(--shadow-sm)" }}>
             <Field label="Code *" value={projectForm.code} onChange={(v) => setProjectForm({ ...projectForm, code: v })} required />
             <Field label="Name *" value={projectForm.name} onChange={(v) => setProjectForm({ ...projectForm, name: v })} required className="sm:col-span-2" />
             <Field label="Client" value={projectForm.client} onChange={(v) => setProjectForm({ ...projectForm, client: v })} />
             <div className="sm:col-span-4">
-              <button type="submit" disabled={saving} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+              <button type="submit" disabled={saving} className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">
                 {saving ? "Saving..." : "Create project"}
               </button>
             </div>
@@ -118,21 +118,21 @@ export default function ProjectsPage() {
         )}
 
         {loading ? (
-          <p className="text-sm text-slate-500">Loading...</p>
+          <p className="text-sm text-mist">Loading...</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+          <div className="overflow-x-auto rounded-2xl border border-hair bg-panel" style={{ boxShadow: "var(--shadow-sm)" }}>
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <thead className="font-mono text-xs tracking-[0.1em] text-mist uppercase">
                 <tr><th className="px-3 py-2">Code</th><th className="px-3 py-2">Name</th><th className="px-3 py-2">Client</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Tasks</th></tr>
               </thead>
               <tbody>
                 {projects.map((p) => (
-                  <tr key={p.id} className="cursor-pointer border-t border-slate-100 hover:bg-slate-50" onClick={() => setFilterProject(p.id === filterProject ? "" : p.id)}>
-                    <td className="px-3 py-2 font-mono text-xs text-slate-700">{p.code}</td>
-                    <td className="px-3 py-2 font-medium text-slate-900">{p.name}</td>
-                    <td className="px-3 py-2 text-slate-600">{p.client || "-"}</td>
+                  <tr key={p.id} className="cursor-pointer border-t border-hair hover:bg-midnight" onClick={() => setFilterProject(p.id === filterProject ? "" : p.id)}>
+                    <td className="px-3 py-2 font-mono text-xs text-mist">{p.code}</td>
+                    <td className="px-3 py-2 font-medium text-fg">{p.name}</td>
+                    <td className="px-3 py-2 text-mist">{p.client || "-"}</td>
                     <td className="px-3 py-2"><StatusBadge status={p.status} /></td>
-                    <td className="px-3 py-2 text-slate-600">{tasks.filter((t) => t.project_id === p.id).length}</td>
+                    <td className="px-3 py-2 font-mono text-mist">{tasks.filter((t) => t.project_id === p.id).length}</td>
                   </tr>
                 ))}
               </tbody>
@@ -144,38 +144,38 @@ export default function ProjectsPage() {
       <div>
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Tasks {filterProject && <span className="text-sm font-normal text-slate-500">(filtered by project - click again or clear to show all)</span>}</h2>
-            <p className="text-sm text-slate-500">blocked_by_po_id renders as a badge; it clears automatically server-side once that PO is received.</p>
+            <h2 className="text-lg font-medium text-fg">Tasks {filterProject && <span className="text-sm font-normal text-mist">(filtered by project - click again or clear to show all)</span>}</h2>
+            <p className="text-sm text-mist">blocked_by_po_id renders as a badge; it clears automatically server-side once that PO is received.</p>
           </div>
           <div className="flex gap-2">
-            {filterProject && <button onClick={() => setFilterProject("")} className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">Clear filter</button>}
-            <button onClick={() => setShowTaskForm((s) => !s)} className="rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800">
+            {filterProject && <button onClick={() => setFilterProject("")} className="rounded-lg border border-line px-3 py-2 text-sm text-mist transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-midnight">Clear filter</button>}
+            <button onClick={() => setShowTaskForm((s) => !s)} className="rounded-lg bg-rust px-3 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper">
               {showTaskForm ? "Cancel" : "+ New task"}
             </button>
           </div>
         </div>
 
         {showTaskForm && (
-          <form onSubmit={handleCreateTask} className="mb-6 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4">
+          <form onSubmit={handleCreateTask} className="mb-6 grid grid-cols-1 gap-3 rounded-2xl border border-hair bg-panel p-4 sm:grid-cols-4" style={{ boxShadow: "var(--shadow-sm)" }}>
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">Project</span>
-              <select value={taskForm.project_id} onChange={(e) => setTaskForm({ ...taskForm, project_id: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-                <option value="">-- none --</option>
-                {projects.map((p) => <option key={p.id} value={p.id}>{p.code} - {p.name}</option>)}
+              <span className="mb-1 block font-medium text-fg">Project</span>
+              <select value={taskForm.project_id} onChange={(e) => setTaskForm({ ...taskForm, project_id: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+                <option value="" className="bg-panel">-- none --</option>
+                {projects.map((p) => <option key={p.id} value={p.id} className="bg-panel">{p.code} - {p.name}</option>)}
               </select>
             </label>
             <Field label="Title *" value={taskForm.title} onChange={(v) => setTaskForm({ ...taskForm, title: v })} required className="sm:col-span-2" />
             <Field label="Due" value={taskForm.due} onChange={(v) => setTaskForm({ ...taskForm, due: v })} type="date" />
             <Field label="Assignee (user id)" value={taskForm.assignee} onChange={(v) => setTaskForm({ ...taskForm, assignee: v })} />
             <label className="block text-sm sm:col-span-2">
-              <span className="mb-1 block font-medium text-slate-700">Blocked by PO</span>
-              <select value={taskForm.blocked_by_po_id} onChange={(e) => setTaskForm({ ...taskForm, blocked_by_po_id: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-                <option value="">-- not blocked --</option>
-                {pos.map((p) => <option key={p.id} value={p.id}>{p.po_no} ({p.status})</option>)}
+              <span className="mb-1 block font-medium text-fg">Blocked by PO</span>
+              <select value={taskForm.blocked_by_po_id} onChange={(e) => setTaskForm({ ...taskForm, blocked_by_po_id: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+                <option value="" className="bg-panel">-- not blocked --</option>
+                {pos.map((p) => <option key={p.id} value={p.id} className="bg-panel">{p.po_no} ({p.status})</option>)}
               </select>
             </label>
             <div className="sm:col-span-4">
-              <button type="submit" disabled={saving} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+              <button type="submit" disabled={saving} className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">
                 {saving ? "Saving..." : "Create task"}
               </button>
             </div>
@@ -183,35 +183,35 @@ export default function ProjectsPage() {
         )}
 
         {!loading && (
-          <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+          <div className="overflow-x-auto rounded-2xl border border-hair bg-panel" style={{ boxShadow: "var(--shadow-sm)" }}>
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <thead className="font-mono text-xs tracking-[0.1em] text-mist uppercase">
                 <tr><th className="px-3 py-2">Title</th><th className="px-3 py-2">Project</th><th className="px-3 py-2">Due</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Blocked</th><th className="px-3 py-2"></th></tr>
               </thead>
               <tbody>
                 {visibleTasks.length === 0 && (
-                  <tr><td colSpan={6} className="px-3 py-4 text-center text-slate-400">No tasks.</td></tr>
+                  <tr><td colSpan={6} className="px-3 py-4 text-center text-mist">No tasks.</td></tr>
                 )}
                 {visibleTasks.map((t) => {
                   const project = projects.find((p) => p.id === t.project_id);
                   const blockingPo = t.blocked_by_po_id ? poById.get(t.blocked_by_po_id) : null;
                   return (
-                    <tr key={t.id} className="border-t border-slate-100 hover:bg-slate-50">
-                      <td className="px-3 py-2 font-medium text-slate-900">{t.title}</td>
-                      <td className="px-3 py-2 text-slate-600">{project ? project.code : "-"}</td>
-                      <td className="px-3 py-2 text-slate-600">{t.due || "-"}</td>
+                    <tr key={t.id} className="border-t border-hair hover:bg-midnight">
+                      <td className="px-3 py-2 font-medium text-fg">{t.title}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-mist">{project ? project.code : "-"}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-mist">{t.due || "-"}</td>
                       <td className="px-3 py-2"><StatusBadge status={t.status} /></td>
                       <td className="px-3 py-2">
                         {t.blocked_by_po_id ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800" title={`Blocked until PO ${blockingPo?.po_no ?? t.blocked_by_po_id} reaches 'received'`}>
+                          <span className="inline-flex items-center gap-1 rounded-md border border-rust px-2 py-0.5 text-xs font-medium text-rust" title={`Blocked until PO ${blockingPo?.po_no ?? t.blocked_by_po_id} reaches 'received'`}>
                             Blocked by {blockingPo?.po_no ?? "PO"}
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-400">not blocked</span>
+                          <span className="rounded-md border border-line px-2 py-0.5 text-xs text-mist">not blocked</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <button onClick={() => markDone(t)} className="text-teal-700 hover:underline">
+                        <button onClick={() => markDone(t)} className="text-copper hover:underline">
                           {t.status === "done" ? "Reopen" : "Mark done"}
                         </button>
                       </td>
@@ -229,12 +229,12 @@ export default function ProjectsPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    active: "bg-teal-100 text-teal-800", open: "bg-slate-100 text-slate-700",
-    in_progress: "bg-blue-100 text-blue-800", blocked: "bg-amber-100 text-amber-800",
-    done: "bg-green-100 text-green-800", cancelled: "bg-red-100 text-red-800",
-    on_hold: "bg-amber-100 text-amber-800", completed: "bg-green-100 text-green-800",
+    active: "border-copper text-copper", open: "border-line text-mist",
+    in_progress: "border-copper text-copper", blocked: "border-rust text-rust",
+    done: "border-moss text-moss", cancelled: "border-rust text-rust",
+    on_hold: "border-line text-mist", completed: "border-moss text-moss",
   };
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors[status] ?? "bg-slate-100 text-slate-700"}`}>{status}</span>;
+  return <span className={`rounded-md border bg-midnight px-2 py-0.5 text-xs font-medium ${colors[status] ?? "border-line text-mist"}`}>{status}</span>;
 }
 
 function Field({
@@ -242,8 +242,8 @@ function Field({
 }: { label: string; value: string; onChange: (v: string) => void; className?: string; type?: string; required?: boolean }) {
   return (
     <label className={`block text-sm ${className ?? ""}`}>
-      <span className="mb-1 block font-medium text-slate-700">{label}</span>
-      <input type={type} required={required} value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
+      <span className="mb-1 block font-medium text-fg">{label}</span>
+      <input type={type} required={required} value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
     </label>
   );
 }

@@ -71,95 +71,105 @@ export default function NewPoPage() {
 
   return (
     <div>
-      <h1 className="mb-1 text-lg font-semibold text-slate-900">New Purchase Order</h1>
-      <p className="mb-4 text-sm text-slate-500">PO number, GST split and amount-in-words are all computed server-side after creation.</p>
+      <h1 className="mb-1 font-display text-2xl font-light text-fg">New Purchase Order</h1>
+      <p className="mb-4 text-sm text-mist">PO number, GST split and amount-in-words are all computed server-side after creation.</p>
 
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
 
       <div className="mb-4 flex gap-2">
-        <button onClick={() => setMode("scratch")} className={`rounded-md px-3 py-2 text-sm font-medium ${mode === "scratch" ? "bg-teal-700 text-white" : "border border-slate-300 text-slate-600"}`}>
+        <button
+          onClick={() => setMode("scratch")}
+          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 [transition-timing-function:var(--ease)] ${
+            mode === "scratch" ? "bg-rust text-fg" : "border border-line text-mist hover:border-copper"
+          }`}
+        >
           From scratch
         </button>
-        <button onClick={() => setMode("bom")} className={`rounded-md px-3 py-2 text-sm font-medium ${mode === "bom" ? "bg-teal-700 text-white" : "border border-slate-300 text-slate-600"}`}>
+        <button
+          onClick={() => setMode("bom")}
+          className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 [transition-timing-function:var(--ease)] ${
+            mode === "bom" ? "bg-rust text-fg" : "border border-line text-mist hover:border-copper"
+          }`}
+        >
           From a released BOM
         </button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 rounded-2xl border border-hair bg-panel p-4 sm:grid-cols-4" style={{ boxShadow: "var(--shadow-sm)" }}>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Vendor *</span>
-            <select required value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">-- select --</option>
-              {vendors.map((v) => <option key={v.id} value={v.id}>{v.name} ({v.state_code ?? "?"})</option>)}
+            <span className="mb-1 block font-medium text-fg">Vendor *</span>
+            <select required value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+              <option value="" className="bg-panel">-- select --</option>
+              {vendors.map((v) => <option key={v.id} value={v.id} className="bg-panel">{v.name} ({v.state_code ?? "?"})</option>)}
             </select>
           </label>
           {mode === "bom" && (
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">Released BOM *</span>
-              <select required value={bomId} onChange={(e) => setBomId(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-                <option value="">-- select --</option>
-                {boms.map((b) => <option key={b.id} value={b.id}>{b.name} rev {b.revision}</option>)}
+              <span className="mb-1 block font-medium text-fg">Released BOM *</span>
+              <select required value={bomId} onChange={(e) => setBomId(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+                <option value="" className="bg-panel">-- select --</option>
+                {boms.map((b) => <option key={b.id} value={b.id} className="bg-panel">{b.name} rev {b.revision}</option>)}
               </select>
             </label>
           )}
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">PO date</span>
-            <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">PO date</span>
+            <input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Freight</span>
-            <input type="number" value={freight} onChange={(e) => setFreight(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">Freight</span>
+            <input type="number" value={freight} onChange={(e) => setFreight(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
           </label>
           {mode === "bom" && (
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">Default GST rate %</span>
-              <input type="number" value={defaultGst} onChange={(e) => setDefaultGst(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+              <span className="mb-1 block font-medium text-fg">Default GST rate %</span>
+              <input type="number" value={defaultGst} onChange={(e) => setDefaultGst(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
             </label>
           )}
           <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block font-medium text-slate-700">Delivery address</span>
-            <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">Delivery address</span>
+            <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Payment terms</span>
-            <input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">Payment terms</span>
+            <input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Delivery terms</span>
-            <input value={deliveryTerms} onChange={(e) => setDeliveryTerms(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">Delivery terms</span>
+            <input value={deliveryTerms} onChange={(e) => setDeliveryTerms(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
           </label>
           <label className="block text-sm sm:col-span-4">
-            <span className="mb-1 block font-medium text-slate-700">Notes</span>
-            <input value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">Notes</span>
+            <input value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
           </label>
         </div>
 
         {mode === "scratch" && (
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <h3 className="mb-3 text-sm font-semibold text-slate-900">Line items</h3>
+          <div className="rounded-2xl border border-hair bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
+            <h3 className="mb-3 text-sm font-semibold text-fg">Line items</h3>
             <div className="space-y-2">
               {items.map((it, i) => (
                 <div key={i} className="grid grid-cols-2 gap-2 sm:grid-cols-6">
-                  <input placeholder="Description" value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} className="rounded border border-slate-300 px-2 py-1.5 text-sm sm:col-span-2" />
-                  <input placeholder="HSN" value={it.hsn} onChange={(e) => updateItem(i, { hsn: e.target.value })} className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
-                  <input placeholder="Qty" type="number" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
-                  <input placeholder="Unit" value={it.unit} onChange={(e) => updateItem(i, { unit: e.target.value })} className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
-                  <input placeholder="Rate" type="number" value={it.rate} onChange={(e) => updateItem(i, { rate: e.target.value })} className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
-                  <input placeholder="GST %" type="number" value={it.gst_rate} onChange={(e) => updateItem(i, { gst_rate: e.target.value })} className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
+                  <input placeholder="Description" value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} className="rounded-lg border border-line bg-transparent px-2 py-1.5 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none sm:col-span-2" />
+                  <input placeholder="HSN" value={it.hsn} onChange={(e) => updateItem(i, { hsn: e.target.value })} className="rounded-lg border border-line bg-transparent px-2 py-1.5 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none font-mono" />
+                  <input placeholder="Qty" type="number" value={it.qty} onChange={(e) => updateItem(i, { qty: e.target.value })} className="rounded-lg border border-line bg-transparent px-2 py-1.5 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none font-mono" />
+                  <input placeholder="Unit" value={it.unit} onChange={(e) => updateItem(i, { unit: e.target.value })} className="rounded-lg border border-line bg-transparent px-2 py-1.5 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
+                  <input placeholder="Rate" type="number" value={it.rate} onChange={(e) => updateItem(i, { rate: e.target.value })} className="rounded-lg border border-line bg-transparent px-2 py-1.5 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none font-mono" />
+                  <input placeholder="GST %" type="number" value={it.gst_rate} onChange={(e) => updateItem(i, { gst_rate: e.target.value })} className="rounded-lg border border-line bg-transparent px-2 py-1.5 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none font-mono" />
                 </div>
               ))}
             </div>
             <div className="mt-3 flex gap-2">
-              <button type="button" onClick={() => setItems((arr) => [...arr, emptyItem()])} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">+ Add line</button>
+              <button type="button" onClick={() => setItems((arr) => [...arr, emptyItem()])} className="rounded-lg border border-line px-3 py-1.5 text-sm text-fg hover:border-copper transition-colors duration-200 [transition-timing-function:var(--ease)]">+ Add line</button>
               {items.length > 1 && (
-                <button type="button" onClick={() => setItems((arr) => arr.slice(0, -1))} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">Remove last</button>
+                <button type="button" onClick={() => setItems((arr) => arr.slice(0, -1))} className="rounded-lg border border-line px-3 py-1.5 text-sm text-fg hover:border-copper transition-colors duration-200 [transition-timing-function:var(--ease)]">Remove last</button>
               )}
             </div>
           </div>
         )}
 
-        <button type="submit" disabled={saving} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+        <button type="submit" disabled={saving} className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">
           {saving ? "Creating..." : "Create PO"}
         </button>
       </form>

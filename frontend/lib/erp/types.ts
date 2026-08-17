@@ -25,6 +25,19 @@ export interface Material {
   hsn: string | null;
 }
 
+export interface HardwareComponent {
+  id: string;
+  category: string;
+  category_order: number;
+  sort_order: number;
+  item: string;
+  spec_function: string | null;
+  tag_id: string | null;
+  tier: number | null;
+  segment: string | null;
+  cost_inr: number | null;
+}
+
 export interface QuotationLine {
   id: string;
   quotation_id: string;

@@ -15,7 +15,7 @@ export default function FlagBadge({
   if (info.isGood) return null;
   return (
     <span
-      className={`ml-2 inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${info.badgeClass}`}
+      className={`ml-2 inline-block rounded-md border px-1.5 py-0.5 font-mono text-[11px] font-medium ${info.badgeClass}`}
       title={`Flagged: ${info.label}`}
     >
       {info.label}

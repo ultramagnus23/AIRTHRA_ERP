@@ -25,7 +25,7 @@ import { DriverApiError, parseTripToken, postPing, stopTrip, type PingResult } f
 const TripMap = dynamic(() => import("@/components/TripMap"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-64 w-full items-center justify-center rounded-lg bg-gray-100 text-sm text-gray-400">
+    <div className="flex h-64 w-full items-center justify-center rounded-2xl border border-hair bg-panel font-mono text-sm text-mist">
       Loading map…
     </div>
   ),
@@ -119,13 +119,13 @@ export default function DriverView({ tripToken }: { tripToken: string }) {
 
   if (phase === "link_error") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-red-50 p-6 text-center">
-        <p className="text-lg font-semibold text-red-700">Invalid driver link</p>
-        <p className="text-sm text-red-600">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-bg p-6 text-center">
+        <p className="font-display text-lg font-light text-rust">Invalid driver link</p>
+        <p className="text-sm text-mist">
           This link doesn&apos;t look like a valid trip link, or the trip could not be found. Ask your
           dispatcher for a fresh link.
         </p>
-        {apiError && <p className="text-xs text-red-500">{apiError}</p>}
+        {apiError && <p className="font-mono text-xs text-rust">{apiError}</p>}
       </div>
     );
   }
@@ -133,27 +133,29 @@ export default function DriverView({ tripToken }: { tripToken: string }) {
   const lastPing = pings[pings.length - 1];
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <header className="bg-blue-700 px-4 py-4 text-white">
-        <h1 className="text-lg font-bold">Airthra Driver</h1>
-        <p className="text-xs text-blue-100">Trip {parsed?.tripId.slice(0, 8)}…</p>
+    <div className="flex min-h-screen flex-col bg-bg">
+      <header className="border-b border-hair px-4 py-4">
+        <h1 className="font-display text-lg font-light text-fg">
+          Airthra<span className="text-copper">.</span> Driver
+        </h1>
+        <p className="font-mono text-xs text-mist">Trip {parsed?.tripId.slice(0, 8)}…</p>
       </header>
 
       <main className="flex flex-1 flex-col gap-4 p-4">
         <StatusBanner phase={phase} lastPingTs={lastPing?.ts} pingCount={pingCount} />
 
         {geoError && (
-          <div className="rounded-lg bg-amber-100 p-3 text-sm text-amber-800" role="alert">
+          <div className="rounded-2xl border border-copper/40 bg-copper/10 p-3 text-sm text-copper" role="alert">
             {geoError}
           </div>
         )}
         {apiError && (
-          <div className="rounded-lg bg-red-100 p-3 text-sm text-red-800" role="alert">
+          <div className="rounded-2xl border border-rust/40 bg-rust/10 p-3 text-sm text-rust" role="alert">
             {apiError}
           </div>
         )}
 
-        <div className="flex-1">
+        <div className="flex-1 overflow-hidden rounded-2xl border border-hair" style={{ boxShadow: "var(--shadow-sm)" }}>
           <TripMap pings={pings} heightClassName="h-72" />
         </div>
 
@@ -161,14 +163,15 @@ export default function DriverView({ tripToken }: { tripToken: string }) {
           type="button"
           onClick={phase === "pinging" ? handleStop : handleStart}
           disabled={phase === "stopped"}
-          className={`w-full rounded-2xl py-6 text-2xl font-bold text-white shadow-lg transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${
-            phase === "pinging" ? "bg-red-600" : "bg-green-600"
+          className={`w-full rounded-lg py-6 text-2xl font-bold text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${
+            phase === "pinging" ? "bg-rust hover:bg-copper" : "bg-moss hover:bg-copper"
           }`}
+          style={{ boxShadow: "var(--shadow-md)" }}
         >
           {phase === "pinging" ? "STOP TRIP" : phase === "stopped" ? "TRIP ENDED" : "START TRIP"}
         </button>
 
-        <p className="text-center text-xs text-gray-400">
+        <p className="text-center font-mono text-xs text-mist">
           Keep this page open while driving. GPS location is sent every 30 seconds.
         </p>
       </main>
@@ -186,18 +189,21 @@ function StatusBanner({
   pingCount: number;
 }) {
   const color =
-    phase === "pinging" ? "bg-green-100 text-green-800" : phase === "stopped" ? "bg-gray-200 text-gray-600" : "bg-blue-100 text-blue-800";
+    phase === "pinging"
+      ? "border-moss/40 bg-moss/10 text-moss"
+      : phase === "stopped"
+        ? "border-line bg-midnight text-mist"
+        : "border-copper/40 bg-copper/10 text-copper";
+  const dot = phase === "pinging" ? "bg-moss" : phase === "stopped" ? "bg-mist" : "bg-copper";
   const label = phase === "pinging" ? "Pinging live" : phase === "stopped" ? "Trip completed" : "Not started";
 
   return (
-    <div className={`rounded-lg p-3 text-sm font-medium ${color}`}>
+    <div className={`rounded-2xl border p-3 text-sm font-medium ${color}`} style={{ boxShadow: "var(--shadow-sm)" }}>
       <div className="flex items-center gap-2">
-        <span
-          className={`h-2.5 w-2.5 rounded-full ${phase === "pinging" ? "animate-pulse bg-green-600" : "bg-gray-400"}`}
-        />
+        <span className={`h-2.5 w-2.5 rounded-full ${phase === "pinging" ? "animate-pulse" : ""} ${dot}`} />
         {label}
       </div>
-      <div className="mt-1 text-xs font-normal opacity-80">
+      <div className="mt-1 font-mono text-xs font-normal opacity-80">
         {lastPingTs ? `Last ping: ${new Date(lastPingTs).toLocaleTimeString()}` : "No pings sent yet"}
         {pingCount > 0 ? ` · ${pingCount} sent` : ""}
       </div>

@@ -49,45 +49,45 @@ export default function PoDetailPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
-  if (error && !po) return <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>;
+  if (loading) return <p className="text-sm text-mist">Loading...</p>;
+  if (error && !po) return <p className="rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>;
   if (!po) return null;
 
   const totals = po.totals;
 
   return (
     <div>
-      <Link href="/pos" className="mb-4 inline-block text-sm text-teal-700 hover:underline">&larr; Back to POs</Link>
+      <Link href="/pos" className="mb-4 inline-block text-sm text-copper hover:underline">&larr; Back to POs</Link>
 
-      <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="mb-6 rounded-2xl border border-hair bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="font-mono text-lg font-semibold text-slate-900">{po.po_no}</h1>
+          <h1 className="font-mono text-lg font-semibold text-fg">{po.po_no}</h1>
           <div className="flex items-center gap-2">
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${po.status === "draft" ? "bg-slate-100 text-slate-700" : "bg-blue-100 text-blue-800"}`}>{po.status}</span>
+            <StatusBadge status={po.status} />
             {po.status === "draft" && (
-              <button onClick={handleIssue} className="rounded-md bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800">Issue PO</button>
+              <button onClick={handleIssue} className="rounded-lg bg-rust px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper">Issue PO</button>
             )}
-            <button onClick={handlePdf} disabled={pdfBusy} className="rounded-md border border-teal-700 px-3 py-1.5 text-sm font-medium text-teal-700 hover:bg-teal-50 disabled:opacity-50">
+            <button onClick={handlePdf} disabled={pdfBusy} className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:border-copper disabled:opacity-50">
               {pdfBusy ? "Generating..." : "Download PDF"}
             </button>
           </div>
         </div>
         <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
-          <div><dt className="text-slate-500">Vendor</dt><dd className="text-slate-800">{vendor?.name ?? po.vendor_id}</dd></div>
-          <div><dt className="text-slate-500">Vendor state</dt><dd className="text-slate-800">{vendor?.state_code ?? "-"}</dd></div>
-          <div><dt className="text-slate-500">Date</dt><dd className="text-slate-800">{po.po_date}</dd></div>
-          <div><dt className="text-slate-500">Freight</dt><dd className="text-slate-800">{po.freight ?? "-"}</dd></div>
+          <div><dt className="text-mist">Vendor</dt><dd className="text-fg">{vendor?.name ?? po.vendor_id}</dd></div>
+          <div><dt className="text-mist">Vendor state</dt><dd className="font-mono text-fg">{vendor?.state_code ?? "-"}</dd></div>
+          <div><dt className="text-mist">Date</dt><dd className="font-mono text-fg">{po.po_date}</dd></div>
+          <div><dt className="text-mist">Freight</dt><dd className="font-mono text-fg">{po.freight ?? "-"}</dd></div>
         </dl>
         {pdfUrl && (
-          <p className="mt-2 text-xs text-slate-500">Last generated PDF: <a href={pdfUrl} target="_blank" rel="noreferrer" className="text-teal-700 hover:underline">{pdfUrl}</a></p>
+          <p className="mt-2 text-xs text-mist">Last generated PDF: <a href={pdfUrl} target="_blank" rel="noreferrer" className="text-copper hover:underline">{pdfUrl}</a></p>
         )}
       </div>
 
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
 
-      <div className="mb-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <div className="mb-4 overflow-x-auto rounded-2xl border border-hair bg-panel" style={{ boxShadow: "var(--shadow-sm)" }}>
         <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+          <thead className="font-mono text-xs tracking-[0.1em] text-mist uppercase">
             <tr>
               <th className="px-3 py-2">Description</th><th className="px-3 py-2">HSN</th><th className="px-3 py-2">Qty</th>
               <th className="px-3 py-2">Unit</th><th className="px-3 py-2">Rate</th><th className="px-3 py-2">Taxable</th>
@@ -97,19 +97,19 @@ export default function PoDetailPage() {
           </thead>
           <tbody>
             {(po.items ?? []).map((it) => (
-              <tr key={it.id} className="border-t border-slate-100">
-                <td className="px-3 py-2">{it.description}</td>
-                <td className="px-3 py-2 text-slate-600">{it.hsn || "-"}</td>
-                <td className="px-3 py-2">{it.qty}</td>
-                <td className="px-3 py-2 text-slate-600">{it.unit}</td>
-                <td className="px-3 py-2">{it.rate}</td>
-                <td className="px-3 py-2">{it.taxable}</td>
-                <td className="px-3 py-2">{it.gst_rate}%</td>
-                <td className="px-3 py-2">{it.cgst}</td>
-                <td className="px-3 py-2">{it.sgst}</td>
-                <td className="px-3 py-2">{it.igst}</td>
-                <td className="px-3 py-2 font-medium">{it.line_total}</td>
-                <td className="px-3 py-2 text-slate-600">{it.received_qty} / {it.qty}</td>
+              <tr key={it.id} className="border-t border-hair hover:bg-midnight">
+                <td className="px-3 py-2 text-fg">{it.description}</td>
+                <td className="px-3 py-2 font-mono text-mist">{it.hsn || "-"}</td>
+                <td className="px-3 py-2 font-mono text-fg">{it.qty}</td>
+                <td className="px-3 py-2 text-mist">{it.unit}</td>
+                <td className="px-3 py-2 font-mono text-fg">{it.rate}</td>
+                <td className="px-3 py-2 font-mono text-fg">{it.taxable}</td>
+                <td className="px-3 py-2 font-mono text-fg">{it.gst_rate}%</td>
+                <td className="px-3 py-2 font-mono text-fg">{it.cgst}</td>
+                <td className="px-3 py-2 font-mono text-fg">{it.sgst}</td>
+                <td className="px-3 py-2 font-mono text-fg">{it.igst}</td>
+                <td className="px-3 py-2 font-mono font-medium text-fg">{it.line_total}</td>
+                <td className="px-3 py-2 font-mono text-mist">{it.received_qty} / {it.qty}</td>
               </tr>
             ))}
           </tbody>
@@ -117,19 +117,46 @@ export default function PoDetailPage() {
       </div>
 
       {totals && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="mb-2 text-sm font-semibold text-slate-900">GST summary ({totals.tax_regime})</h3>
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
-            <div><dt className="text-slate-500">Taxable</dt><dd className="text-slate-800">₹{totals.taxable}</dd></div>
-            <div><dt className="text-slate-500">CGST</dt><dd className="text-slate-800">₹{totals.cgst}</dd></div>
-            <div><dt className="text-slate-500">SGST</dt><dd className="text-slate-800">₹{totals.sgst}</dd></div>
-            <div><dt className="text-slate-500">IGST</dt><dd className="text-slate-800">₹{totals.igst}</dd></div>
-            <div><dt className="text-slate-500">Freight</dt><dd className="text-slate-800">₹{totals.freight}</dd></div>
-            <div className="sm:col-span-2"><dt className="text-slate-500">Grand total</dt><dd className="text-lg font-semibold text-slate-900">₹{totals.grand_total}</dd></div>
+        <div
+          className="relative overflow-hidden rounded-2xl border border-hair bg-panel p-4"
+          style={{ boxShadow: "var(--shadow-sm)" }}
+        >
+          <div
+            className="absolute inset-x-0 top-0 h-[2px]"
+            style={{ background: "oklch(0.72 0.15 54 / 0.55)" }}
+            aria-hidden
+          />
+          <span className="flex items-center gap-1.5 font-mono text-xs tracking-[0.08em] text-mist uppercase">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-copper" aria-hidden />
+            GST summary ({totals.tax_regime})
+          </span>
+          <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-4">
+            <div><dt className="text-xs text-mist">Taxable</dt><dd className="font-mono text-fg">₹{totals.taxable}</dd></div>
+            <div><dt className="text-xs text-mist">CGST</dt><dd className="font-mono text-fg">₹{totals.cgst}</dd></div>
+            <div><dt className="text-xs text-mist">SGST</dt><dd className="font-mono text-fg">₹{totals.sgst}</dd></div>
+            <div><dt className="text-xs text-mist">IGST</dt><dd className="font-mono text-fg">₹{totals.igst}</dd></div>
+            <div><dt className="text-xs text-mist">Freight</dt><dd className="font-mono text-fg">₹{totals.freight}</dd></div>
+            <div className="sm:col-span-2"><dt className="text-xs text-mist">Grand total</dt><dd className="font-mono text-lg font-medium text-copper">₹{totals.grand_total}</dd></div>
           </dl>
-          {po.amount_in_words && <p className="mt-3 text-sm italic text-slate-600">{po.amount_in_words}</p>}
+          {po.amount_in_words && <p className="mt-3 text-sm italic text-mist">{po.amount_in_words}</p>}
         </div>
       )}
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    draft: "bg-midnight text-mist",
+    issued: "bg-copper/15 text-copper",
+    partial: "bg-copper/15 text-copper",
+    received: "bg-moss/15 text-moss",
+    closed: "bg-midnight text-mist",
+    cancelled: "bg-rust/15 text-rust",
+  };
+  return (
+    <span className={`rounded-md px-2 py-0.5 font-mono text-xs uppercase tracking-[0.05em] ${styles[status] ?? "bg-midnight text-mist"}`}>
+      {status}
+    </span>
   );
 }

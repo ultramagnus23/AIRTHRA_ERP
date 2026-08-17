@@ -66,97 +66,103 @@ export default function QcPage() {
     }
   }
 
+  const RESULT_ACCENT: Record<string, string> = { pass: "text-moss", fail: "text-rust", rework: "text-copper" };
+
   return (
     <div>
-      <h1 className="mb-1 text-lg font-semibold text-slate-900">QC Entry</h1>
-      <p className="mb-4 text-sm text-slate-500">Record an incoming / in-process / final QC result against a lot, job, or unit serial.</p>
+      <h1 className="mb-1 font-display text-2xl font-light text-fg">QC Entry</h1>
+      <p className="mb-4 text-sm text-mist">Record an incoming / in-process / final QC result against a lot, job, or unit serial.</p>
 
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      {success && <p className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{success}</p>}
+      {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
+      {success && (
+        <p className={`mb-4 rounded-lg border border-hair bg-panel px-3 py-2 text-sm ${RESULT_ACCENT[form.result] ?? "text-fg"}`}>
+          {success}
+        </p>
+      )}
 
-      <form onSubmit={handleSubmit} className="mb-8 grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4">
+      <form onSubmit={handleSubmit} className="mb-8 grid grid-cols-1 gap-3 rounded-2xl border border-hair bg-panel p-4 sm:grid-cols-4" style={{ boxShadow: "var(--shadow-sm)" }}>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Target *</span>
-          <select value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value as "lot" | "job" | "serial" })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <option value="lot">Inventory lot (incoming QC)</option>
-            <option value="job">Fabrication job (in-process QC)</option>
-            <option value="serial">Unit serial (final QC)</option>
+          <span className="mb-1 block font-medium text-fg">Target *</span>
+          <select value={form.target} onChange={(e) => setForm({ ...form, target: e.target.value as "lot" | "job" | "serial" })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+            <option value="lot" className="bg-panel">Inventory lot (incoming QC)</option>
+            <option value="job" className="bg-panel">Fabrication job (in-process QC)</option>
+            <option value="serial" className="bg-panel">Unit serial (final QC)</option>
           </select>
         </label>
 
         {form.target === "lot" && (
           <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block font-medium text-slate-700">Lot *</span>
-            <select required value={form.lot_id} onChange={(e) => setForm({ ...form, lot_id: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">-- select --</option>
-              {lots.map((l) => <option key={l.lot_id} value={l.lot_id}>{l.lot_id.slice(0, 8)} ({l.heat_no || "no heat no."})</option>)}
+            <span className="mb-1 block font-medium text-fg">Lot *</span>
+            <select required value={form.lot_id} onChange={(e) => setForm({ ...form, lot_id: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+              <option value="" className="bg-panel">-- select --</option>
+              {lots.map((l) => <option key={l.lot_id} value={l.lot_id} className="bg-panel">{l.lot_id.slice(0, 8)} ({l.heat_no || "no heat no."})</option>)}
             </select>
           </label>
         )}
         {form.target === "job" && (
           <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block font-medium text-slate-700">Fabrication job *</span>
-            <select required value={form.job_id} onChange={(e) => setForm({ ...form, job_id: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">-- select --</option>
-              {jobs.map((j) => <option key={j.id} value={j.id}>{j.id.slice(0, 8)} ({j.status})</option>)}
+            <span className="mb-1 block font-medium text-fg">Fabrication job *</span>
+            <select required value={form.job_id} onChange={(e) => setForm({ ...form, job_id: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+              <option value="" className="bg-panel">-- select --</option>
+              {jobs.map((j) => <option key={j.id} value={j.id} className="bg-panel">{j.id.slice(0, 8)} ({j.status})</option>)}
             </select>
           </label>
         )}
         {form.target === "serial" && (
           <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 block font-medium text-slate-700">Unit serial *</span>
-            <select required value={form.unit_serial} onChange={(e) => setForm({ ...form, unit_serial: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">-- select --</option>
-              {serials.map((s) => <option key={s.serial} value={s.serial}>{s.serial}</option>)}
+            <span className="mb-1 block font-medium text-fg">Unit serial *</span>
+            <select required value={form.unit_serial} onChange={(e) => setForm({ ...form, unit_serial: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+              <option value="" className="bg-panel">-- select --</option>
+              {serials.map((s) => <option key={s.serial} value={s.serial} className="bg-panel">{s.serial}</option>)}
             </select>
           </label>
         )}
 
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">QC type</span>
-          <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as typeof form.type })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <option value="incoming">Incoming</option>
-            <option value="in_process">In-process</option>
-            <option value="final">Final</option>
+          <span className="mb-1 block font-medium text-fg">QC type</span>
+          <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as typeof form.type })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+            <option value="incoming" className="bg-panel">Incoming</option>
+            <option value="in_process" className="bg-panel">In-process</option>
+            <option value="final" className="bg-panel">Final</option>
           </select>
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Result</span>
-          <select value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <option value="pass">Pass</option>
-            <option value="fail">Fail</option>
-            <option value="rework">Rework</option>
+          <span className="mb-1 block font-medium text-fg">Result</span>
+          <select value={form.result} onChange={(e) => setForm({ ...form, result: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+            <option value="pass" className="bg-panel">Pass</option>
+            <option value="fail" className="bg-panel">Fail</option>
+            <option value="rework" className="bg-panel">Rework</option>
           </select>
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">Inspector</span>
-          <input value={form.inspector} onChange={(e) => setForm({ ...form, inspector: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <span className="mb-1 block font-medium text-fg">Inspector</span>
+          <input value={form.inspector} onChange={(e) => setForm({ ...form, inspector: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
         </label>
 
         <div className="sm:col-span-4">
-          <button type="submit" disabled={saving} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+          <button type="submit" disabled={saving} className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">
             {saving ? "Saving..." : "Record QC result"}
           </button>
         </div>
       </form>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="mb-2 text-sm font-semibold text-slate-900">Register a new unit serial</h2>
-        <p className="mb-3 text-xs text-slate-500">Needed before QC/jobs can reference it - unit_serials has no other creation UI in this schema.</p>
+      <div className="rounded-2xl border border-hair bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
+        <h2 className="mb-2 text-sm font-semibold text-fg">Register a new unit serial</h2>
+        <p className="mb-3 text-xs text-mist">Needed before QC/jobs can reference it - unit_serials has no other creation UI in this schema.</p>
         <form onSubmit={handleCreateSerial} className="flex flex-wrap items-end gap-3">
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Serial *</span>
-            <input required value={newSerial} onChange={(e) => setNewSerial(e.target.value)} className="rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="AIR-FGD-0001" />
+            <span className="mb-1 block font-medium text-fg">Serial *</span>
+            <input required value={newSerial} onChange={(e) => setNewSerial(e.target.value)} className="rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" placeholder="AIR-FGD-0001" />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-700">Model</span>
-            <input value={newSerialModel} onChange={(e) => setNewSerialModel(e.target.value)} className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mb-1 block font-medium text-fg">Model</span>
+            <input value={newSerialModel} onChange={(e) => setNewSerialModel(e.target.value)} className="rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
           </label>
-          <button type="submit" className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white">Create serial</button>
+          <button type="submit" className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:border-copper">Create serial</button>
         </form>
         {serials.length > 0 && (
           <ul className="mt-3 flex flex-wrap gap-2">
-            {serials.map((s) => <li key={s.serial} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">{s.serial} ({s.status})</li>)}
+            {serials.map((s) => <li key={s.serial} className="rounded-md bg-midnight px-2 py-0.5 font-mono text-xs text-mist">{s.serial} ({s.status})</li>)}
           </ul>
         )}
       </div>

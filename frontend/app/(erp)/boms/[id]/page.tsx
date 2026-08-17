@@ -42,13 +42,13 @@ function DimsForm({ form, setForm }: { form: ItemFormState; setForm: (f: ItemFor
     <>
       {SHAPE_FIELDS[form.shape].map((f) => (
         <label key={f.key} className="block text-sm">
-          <span className="mb-1 block font-medium text-slate-700">{f.label}</span>
+          <span className="mb-1 block font-medium text-fg">{f.label}</span>
           <input
             type="number"
             step="any"
             value={form.dims[f.key] ?? ""}
             onChange={(e) => setForm({ ...form, dims: { ...form.dims, [f.key]: e.target.value } })}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none"
           />
         </label>
       ))}
@@ -185,8 +185,8 @@ export default function BomEditorPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-500">Loading...</p>;
-  if (error && !bom) return <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>;
+  if (loading) return <p className="text-sm text-mist">Loading...</p>;
+  if (error && !bom) return <p className="rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>;
   if (!bom) return null;
 
   const items = bom.items ?? [];
@@ -195,55 +195,49 @@ export default function BomEditorPage() {
 
   return (
     <div>
-      <Link href="/boms" className="mb-4 inline-block text-sm text-teal-700 hover:underline">&larr; Back to BOMs</Link>
+      <Link href="/boms" className="mb-4 inline-block text-sm text-copper hover:underline">&larr; Back to BOMs</Link>
 
-      <div className="mb-6 flex items-start justify-between rounded-lg border border-slate-200 bg-white p-4">
+      <div className="mb-6 flex items-start justify-between rounded-2xl border border-hair bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">{bom.name} <span className="font-mono text-sm font-normal text-slate-500">rev {bom.revision}</span></h1>
+          <h1 className="font-display text-2xl font-light text-fg">{bom.name} <span className="font-mono text-sm font-normal text-mist">rev {bom.revision}</span></h1>
           {bom.supersedes_bom_id && (
-            <p className="text-xs text-slate-500">
-              Supersedes <Link href={`/boms/${bom.supersedes_bom_id}`} className="text-teal-700 hover:underline">a previous released BOM</Link>
+            <p className="text-xs text-mist">
+              Supersedes <Link href={`/boms/${bom.supersedes_bom_id}`} className="text-copper hover:underline">a previous released BOM</Link>
             </p>
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${bom.status === "released" ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-700"}`}>{bom.status}</span>
+          <BomStatusBadge status={bom.status} />
           {bom.status === "draft" && items.length > 0 && (
-            <button onClick={handleRelease} className="rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800">Release</button>
+            <button onClick={handleRelease} className="rounded-lg bg-rust px-3 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper">Release</button>
           )}
           {bom.status === "released" && !showRevise && (
-            <button onClick={() => { setShowRevise(true); setReviseRev(""); }} className="rounded-md bg-teal-700 px-3 py-2 text-sm font-medium text-white hover:bg-teal-800">Revise</button>
+            <button onClick={() => { setShowRevise(true); setReviseRev(""); }} className="rounded-lg bg-rust px-3 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper">Revise</button>
           )}
           {showRevise && (
             <div className="flex items-center gap-2">
-              <input value={reviseRev} onChange={(e) => setReviseRev(e.target.value)} placeholder="new revision e.g. B" className="w-32 rounded border border-slate-300 px-2 py-1 text-sm" />
-              <button onClick={handleRevise} disabled={saving || !reviseRev} className="rounded bg-teal-700 px-3 py-1.5 text-sm text-white disabled:opacity-50">Confirm</button>
+              <input value={reviseRev} onChange={(e) => setReviseRev(e.target.value)} placeholder="new revision e.g. B" className="w-32 rounded-lg border border-line bg-transparent px-2 py-1 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
+              <button onClick={handleRevise} disabled={saving || !reviseRev} className="rounded-lg bg-rust px-3 py-1.5 text-sm text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">Confirm</button>
             </div>
           )}
         </div>
       </div>
 
-      {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
       {readOnly && (
-        <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">
           This BOM is released and immutable. Use &quot;Revise&quot; above to create a new draft revision before editing items.
         </p>
       )}
 
       <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <p className="text-xs uppercase text-slate-500">Total weight</p>
-          <p className="text-2xl font-semibold text-slate-900">{totalWeight.toFixed(2)} kg</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <p className="text-xs uppercase text-slate-500">Total cost</p>
-          <p className="text-2xl font-semibold text-slate-900">₹{totalCost.toFixed(2)}</p>
-        </div>
+        <StatTile label="Total weight" value={totalWeight.toFixed(2)} unit="kg" />
+        <StatTile label="Total cost" value={totalCost.toFixed(2)} unit="₹" unitPrefix />
       </div>
 
-      <div className="mb-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <div className="mb-4 overflow-x-auto rounded-2xl border border-hair bg-panel" style={{ boxShadow: "var(--shadow-sm)" }}>
         <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+          <thead className="font-mono text-xs tracking-[0.1em] text-mist uppercase">
             <tr>
               <th className="px-3 py-2">Description</th><th className="px-3 py-2">Material</th><th className="px-3 py-2">Shape</th>
               <th className="px-3 py-2">Qty</th><th className="px-3 py-2">Unit wt (kg)</th><th className="px-3 py-2">Total wt (kg)</th>
@@ -251,21 +245,21 @@ export default function BomEditorPage() {
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 && <tr><td colSpan={8} className="px-3 py-4 text-center text-slate-400">No items yet.</td></tr>}
+            {items.length === 0 && <tr><td colSpan={8} className="px-3 py-4 text-center text-mist">No items yet.</td></tr>}
             {items.map((it) => (
-              <tr key={it.id} className="border-t border-slate-100">
-                <td className="px-3 py-2">{it.description}</td>
-                <td className="px-3 py-2 text-slate-600">{materials.find((m) => m.id === it.material_id)?.name ?? it.material_id}</td>
-                <td className="px-3 py-2 capitalize text-slate-600">{it.shape}</td>
-                <td className="px-3 py-2">{it.qty}</td>
-                <td className="px-3 py-2">{it.unit_weight_kg?.toFixed(3) ?? "-"}</td>
-                <td className="px-3 py-2 font-medium">{it.total_weight_kg?.toFixed(3) ?? "-"}</td>
-                <td className="px-3 py-2 font-medium">₹{it.cost?.toFixed(2) ?? "-"}</td>
-                <td className="space-x-2 px-3 py-2 whitespace-nowrap text-right">
+              <tr key={it.id} className="border-t border-hair hover:bg-midnight">
+                <td className="px-3 py-2 text-fg">{it.description}</td>
+                <td className="px-3 py-2 text-mist">{materials.find((m) => m.id === it.material_id)?.name ?? it.material_id}</td>
+                <td className="px-3 py-2 text-mist capitalize">{it.shape}</td>
+                <td className="px-3 py-2 font-mono text-mist">{it.qty}</td>
+                <td className="px-3 py-2 font-mono text-mist">{it.unit_weight_kg?.toFixed(3) ?? "-"}</td>
+                <td className="px-3 py-2 font-mono font-medium text-fg">{it.total_weight_kg?.toFixed(3) ?? "-"}</td>
+                <td className="px-3 py-2 font-mono font-medium text-fg">₹{it.cost?.toFixed(2) ?? "-"}</td>
+                <td className="space-x-2 px-3 py-2 text-right whitespace-nowrap">
                   {!readOnly && (
                     <>
-                      <button onClick={() => startEditItem(it)} className="text-teal-700 hover:underline">Edit</button>
-                      <button onClick={() => handleDeleteItem(it.id)} className="text-red-600 hover:underline">Delete</button>
+                      <button onClick={() => startEditItem(it)} className="text-copper hover:underline">Edit</button>
+                      <button onClick={() => handleDeleteItem(it.id)} className="text-rust hover:underline">Delete</button>
                     </>
                   )}
                 </td>
@@ -276,63 +270,52 @@ export default function BomEditorPage() {
       </div>
 
       {!readOnly && (
-        <form onSubmit={handleAddItem} className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="mb-3 text-sm font-semibold text-slate-900">{editingItemId ? "Edit item" : "Add item"}</h3>
+        <form onSubmit={handleAddItem} className="rounded-2xl border border-hair bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
+          <h3 className="mb-3 text-sm font-semibold text-fg">{editingItemId ? "Edit item" : "Add item"}</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <label className="block text-sm sm:col-span-2">
-              <span className="mb-1 block font-medium text-slate-700">Description *</span>
-              <input required value={itemForm.description} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+              <span className="mb-1 block font-medium text-fg">Description *</span>
+              <input required value={itemForm.description} onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">Material *</span>
-              <select required value={itemForm.material_id} onChange={(e) => setItemForm({ ...itemForm, material_id: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-                <option value="">-- select --</option>
-                {materials.map((m) => <option key={m.id} value={m.id}>{m.name} {m.grade ? `(${m.grade})` : ""}</option>)}
+              <span className="mb-1 block font-medium text-fg">Material *</span>
+              <select required value={itemForm.material_id} onChange={(e) => setItemForm({ ...itemForm, material_id: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+                <option value="" className="bg-panel">-- select --</option>
+                {materials.map((m) => <option key={m.id} value={m.id} className="bg-panel">{m.name} {m.grade ? `(${m.grade})` : ""}</option>)}
               </select>
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">Shape *</span>
-              <select value={itemForm.shape} onChange={(e) => setItemForm({ ...itemForm, shape: e.target.value as BomShape, dims: {} })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-                <option value="plate">Plate (L x W x T mm)</option>
-                <option value="rod">Rod (diameter x L mm)</option>
-                <option value="pipe">Pipe (OD x wall x L mm)</option>
-                <option value="custom">Custom (direct unit weight)</option>
+              <span className="mb-1 block font-medium text-fg">Shape *</span>
+              <select value={itemForm.shape} onChange={(e) => setItemForm({ ...itemForm, shape: e.target.value as BomShape, dims: {} })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg focus:border-copper focus:outline-none">
+                <option value="plate" className="bg-panel">Plate (L x W x T mm)</option>
+                <option value="rod" className="bg-panel">Rod (diameter x L mm)</option>
+                <option value="pipe" className="bg-panel">Pipe (OD x wall x L mm)</option>
+                <option value="custom" className="bg-panel">Custom (direct unit weight)</option>
               </select>
             </label>
 
             <DimsForm form={itemForm} setForm={setItemForm} />
 
             <label className="block text-sm">
-              <span className="mb-1 block font-medium text-slate-700">Qty</span>
-              <input type="number" step="any" value={itemForm.qty} onChange={(e) => setItemForm({ ...itemForm, qty: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+              <span className="mb-1 block font-medium text-fg">Qty</span>
+              <input type="number" step="any" value={itemForm.qty} onChange={(e) => setItemForm({ ...itemForm, qty: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
             </label>
             {itemForm.shape !== "custom" && (
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-slate-700">Scrap %</span>
-                <input type="number" step="any" value={itemForm.scrap_pct} onChange={(e) => setItemForm({ ...itemForm, scrap_pct: e.target.value })} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+                <span className="mb-1 block font-medium text-fg">Scrap %</span>
+                <input type="number" step="any" value={itemForm.scrap_pct} onChange={(e) => setItemForm({ ...itemForm, scrap_pct: e.target.value })} className="w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm text-fg placeholder:text-mist focus:border-copper focus:outline-none" />
               </label>
             )}
           </div>
 
-          <div className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm">
-            <span className="font-medium text-slate-700">Live preview (server-computed): </span>
-            {previewError ? (
-              <span className="text-red-600">{previewError}</span>
-            ) : preview ? (
-              <span className="text-slate-800">
-                unit {preview.unit_weight_kg.toFixed(3)} kg &middot; total {preview.total_weight_kg.toFixed(3)} kg &middot; cost ₹{preview.cost.toFixed(2)}
-              </span>
-            ) : (
-              <span className="text-slate-400">fill in material + all dimensions to preview</span>
-            )}
-          </div>
+          <WeightPreviewTile preview={preview} previewError={previewError} />
 
           <div className="mt-3 flex gap-2">
-            <button type="submit" disabled={saving} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+            <button type="submit" disabled={saving} className="rounded-lg bg-rust px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 [transition-timing-function:var(--ease)] hover:bg-copper disabled:opacity-50">
               {saving ? "Saving..." : editingItemId ? "Save item" : "Add item"}
             </button>
             {editingItemId && (
-              <button type="button" onClick={() => { setEditingItemId(null); setItemForm(emptyItemForm()); }} className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-600">
+              <button type="button" onClick={() => { setEditingItemId(null); setItemForm(emptyItemForm()); }} className="rounded-lg border border-line px-4 py-2 text-sm text-mist">
                 Cancel edit
               </button>
             )}
@@ -340,5 +323,71 @@ export default function BomEditorPage() {
         </form>
       )}
     </div>
+  );
+}
+
+// Stat-tile pattern mirrored from SensorTile.tsx, adapted for BOM
+// weight/cost fields. Procurement/financial data = copper category
+// per DESIGN.md's categorical color-coding.
+function StatTile({ label, value, unit, unitPrefix }: { label: string; value: string; unit: string; unitPrefix?: boolean }) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-hair bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
+      <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: "oklch(0.72 0.15 54 / 0.55)" }} aria-hidden />
+      <span className="flex items-center gap-1.5 font-mono text-xs tracking-[0.08em] text-mist uppercase">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-copper" aria-hidden />
+        {label}
+      </span>
+      <p className="mt-2 font-mono text-2xl font-medium text-fg tabular-nums transition-colors duration-150">
+        {unitPrefix ? `${unit}${value}` : (
+          <>
+            {value} <span className="text-sm font-normal text-mist">{unit}</span>
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
+// Live server-computed preview, restyled as the same stat-tile moment -
+// copper top edge, mono uppercase label, mono values. Purely
+// presentational: no new client-side calculation, values come straight
+// from the existing weightPreview() API response.
+function WeightPreviewTile({ preview, previewError }: { preview: WeightPreviewT | null; previewError: string | null }) {
+  return (
+    <div className="relative mt-3 overflow-hidden rounded-2xl border border-hair bg-midnight p-3" style={{ boxShadow: "var(--shadow-sm)" }}>
+      <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: "oklch(0.72 0.15 54 / 0.55)" }} aria-hidden />
+      <span className="flex items-center gap-1.5 font-mono text-xs tracking-[0.08em] text-mist uppercase">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-copper" aria-hidden />
+        Live preview (server-computed)
+      </span>
+      <div className="mt-1.5 text-sm">
+        {previewError ? (
+          <span className="text-rust">{previewError}</span>
+        ) : preview ? (
+          <span className="font-mono text-fg transition-colors duration-150 tabular-nums">
+            unit {preview.unit_weight_kg.toFixed(3)} kg &middot; total {preview.total_weight_kg.toFixed(3)} kg &middot; cost ₹{preview.cost.toFixed(2)}
+          </span>
+        ) : (
+          <span className="text-mist">fill in material + all dimensions to preview</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BomStatusBadge({ status }: { status: string }) {
+  if (status === "released") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-moss/15 px-2 py-0.5 text-xs font-medium text-moss">
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-moss" aria-hidden />
+        Released
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-midnight px-2 py-0.5 text-xs font-medium text-mist">
+      <span className="inline-block h-1.5 w-1.5 rounded-full bg-mist" aria-hidden />
+      Draft
+    </span>
   );
 }

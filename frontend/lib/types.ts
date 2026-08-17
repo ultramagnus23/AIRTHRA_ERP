@@ -145,14 +145,21 @@ export interface SensorMeta {
   sensor_id: string;
   label: string;
   unit: string;
+  /** Engineering min/max, mirrors sensors.min_valid/max_valid in seed/seed.py. Presentational only (range-bar context), not a computed value. */
+  min: number;
+  max: number;
+  /** Sub-range considered "normal" for the bar's fill, distinct from the hard min/max. */
+  normal: [number, number];
+  /** Categorical color-coding (Airthra palette only): process/emission readings vs. tank/inventory levels. */
+  accent: "copper" | "moss";
 }
 
 export const SENSOR_MANIFEST: SensorMeta[] = [
-  { sensor_id: "SO2_in", label: "SO2 (inlet)", unit: "ppm" },
-  { sensor_id: "SO2_out", label: "SO2 (stack/outlet)", unit: "ppm" },
-  { sensor_id: "pH", label: "Scrubber pH", unit: "pH" },
-  { sensor_id: "temp_C", label: "Temperature", unit: "C" },
-  { sensor_id: "level_KOH_tank", label: "KOH tank level", unit: "%" },
-  { sensor_id: "level_K2SO3_tank", label: "K2SO3 tank level", unit: "%" },
-  { sensor_id: "flow", label: "Flue gas flow", unit: "m3/h" },
+  { sensor_id: "SO2_in", label: "SO2 (inlet)", unit: "ppm", min: 0, max: 5000, normal: [800, 2000], accent: "copper" },
+  { sensor_id: "SO2_out", label: "SO2 (stack/outlet)", unit: "ppm", min: 0, max: 500, normal: [0, 100], accent: "copper" },
+  { sensor_id: "pH", label: "Scrubber pH", unit: "pH", min: 0, max: 14, normal: [6.5, 8.5], accent: "copper" },
+  { sensor_id: "temp_C", label: "Temperature", unit: "C", min: -10, max: 200, normal: [40, 75], accent: "copper" },
+  { sensor_id: "level_KOH_tank", label: "KOH tank level", unit: "%", min: 0, max: 100, normal: [25, 100], accent: "moss" },
+  { sensor_id: "level_K2SO3_tank", label: "K2SO3 tank level", unit: "%", min: 0, max: 100, normal: [0, 85], accent: "moss" },
+  { sensor_id: "flow", label: "Flue gas flow", unit: "m3/h", min: 0, max: 500, normal: [100, 350], accent: "copper" },
 ];
