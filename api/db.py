@@ -18,6 +18,7 @@ Security" section):
 """
 from __future__ import annotations
 
+import os
 from typing import AsyncIterator
 
 from sqlalchemy import text
@@ -32,16 +33,32 @@ def _role_url(role: str, password: str):
     return url.set(username=role, password=password)
 
 
-tenant_engine = create_async_engine(
-    _role_url(config.PG_TENANT_ROLE, config.PG_TENANT_PASSWORD),
-    future=True,
-    pool_pre_ping=True,
-)
-global_engine = create_async_engine(
-    _role_url(config.PG_GLOBAL_ROLE, config.PG_GLOBAL_PASSWORD),
-    future=True,
-    pool_pre_ping=True,
-)
+# Pool sizing is env-tunable rather than left at SQLAlchemy's defaults
+# (5 + 10 overflow). Two engines exist, so the process ceiling is roughly
+# 2 x (size + overflow) connections - that has to be reconciled against
+# Postgres's own max_connections once the API runs more than one replica,
+# at which point PgBouncer belongs in front of it. Documented in
+# SHIPPING.md B3.
+_POOL_SIZE = int(os.environ.get("DB_POOL_SIZE", "10"))
+_POOL_MAX_OVERFLOW = int(os.environ.get("DB_POOL_MAX_OVERFLOW", "20"))
+# Recycle below any upstream idle-connection timeout so a pooled
+# connection is never handed out already dead.
+_POOL_RECYCLE_S = int(os.environ.get("DB_POOL_RECYCLE_S", "1800"))
+
+
+def _make_engine(role: str, password: str):
+    return create_async_engine(
+        _role_url(role, password),
+        future=True,
+        pool_pre_ping=True,
+        pool_size=_POOL_SIZE,
+        max_overflow=_POOL_MAX_OVERFLOW,
+        pool_recycle=_POOL_RECYCLE_S,
+    )
+
+
+tenant_engine = _make_engine(config.PG_TENANT_ROLE, config.PG_TENANT_PASSWORD)
+global_engine = _make_engine(config.PG_GLOBAL_ROLE, config.PG_GLOBAL_PASSWORD)
 
 
 def engine_for_role(jwt_role: str):

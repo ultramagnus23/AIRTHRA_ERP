@@ -80,3 +80,38 @@ def upload_bytes(key: str, data: bytes, content_type: str) -> dict:
 
     url = f"{MINIO_ENDPOINT}/{MINIO_BUCKET}/{key}"
     return {"url": url, "sha256": sha256, "bytes": len(data)}
+
+
+# Presigned link lifetime. Short enough that a leaked URL in a log, a
+# referrer header or a forwarded email expires quickly; long enough for a
+# human to actually click it after the page renders.
+PRESIGN_EXPIRY_S = int(os.environ.get("MINIO_PRESIGN_EXPIRY_S", "900"))
+
+
+def presigned_url(key: str, expires_s: int | None = None) -> str:
+    """Time-limited download URL for a private object.
+
+    The bucket is no longer anonymously readable (it was provisioned with
+    `mc anonymous set download`, which made every tenant's PO PDFs,
+    drawings and invoices fetchable by anyone who could guess or obtain an
+    object key - see AUDIT.md 2.1). Object keys are structured rather than
+    random, so enumeration was plausible.
+
+    The `url` returned by upload_bytes is therefore an IDENTIFIER, not a
+    fetchable link. Anything handing a download to a browser must mint one
+    of these instead, behind the same auth check that protects the record
+    the object belongs to.
+    """
+    return _client().generate_presigned_url(
+        "get_object",
+        Params={"Bucket": MINIO_BUCKET, "Key": key},
+        ExpiresIn=expires_s or PRESIGN_EXPIRY_S,
+    )
+
+
+def key_from_url(url: str) -> str | None:
+    """Recover the object key from a stored file_url. Returns None if the
+    URL doesn't belong to this bucket, so a caller can't be tricked into
+    presigning something outside it."""
+    prefix = f"{MINIO_ENDPOINT}/{MINIO_BUCKET}/"
+    return url[len(prefix):] if url.startswith(prefix) else None

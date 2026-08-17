@@ -1,0 +1,156 @@
+name: CI
+
+# Nothing ran automatically before this. The P0-P7 gate scripts under
+# tests/ are genuine acceptance tests - they prove GST maths, BOM release
+# immutability, 3-way invoice match, genealogy trace, RLS tenant isolation
+# - and they were only ever run by hand. This wires them to a real
+# TimescaleDB service container so a regression fails a PR instead of
+# reaching a plant.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A newer push to the same branch makes the in-flight run redundant.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (typecheck, lint, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # `npm ci` not `npm install`: fails loudly if package.json and the
+      # lockfile have drifted, rather than silently resolving something
+      # different from what was tested locally.
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm run build
+
+  backend:
+    name: Backend (gates against live Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Must match docker-compose.yml - the migrations use TimescaleDB
+        # hypertables, compression and continuous aggregates, so plain
+        # Postgres would silently skip that DDL and test nothing.
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: airthra
+          POSTGRES_PASSWORD: ci_only_not_a_secret
+          POSTGRES_DB: airthra
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U airthra"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://airthra:ci_only_not_a_secret@localhost:5432/airthra
+      ASYNC_DATABASE_URL: postgresql+asyncpg://airthra:ci_only_not_a_secret@localhost:5432/airthra
+      PG_TENANT_ROLE: airthra_tenant
+      PG_TENANT_PASSWORD: ci_only_tenant
+      PG_GLOBAL_ROLE: airthra_global
+      PG_GLOBAL_PASSWORD: ci_only_global
+      JWT_SECRET: ci_only_jwt_secret_not_used_anywhere_real
+      APP_ENV: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Migrations are idempotent
+        # Running twice is the actual assertion: a migration that is not
+        # re-runnable breaks every future deploy, and that only shows up
+        # on the second run.
+        run: |
+          python -m alembic upgrade head
+          python -m alembic upgrade head
+
+      - name: Migrations reverse cleanly
+        # Proves downgrade paths exist and work. 0006 in particular does a
+        # lossy remap that must not error against real rows.
+        run: |
+          python -m alembic downgrade -1
+          python -m alembic upgrade head
+
+      - name: Seed reference data
+        run: python seed/seed.py
+
+      - name: Seed alarm rules
+        run: |
+          python workers/seed_alarm_rules.py
+          python workers/seed_fault_tree_rules.py
+          python seed/seed_hardware_components.py
+
+      - name: Seed scripts are idempotent
+        # Re-running must be a no-op, not a duplicate-row generator.
+        run: |
+          python workers/seed_fault_tree_rules.py
+          python seed/seed_hardware_components.py
+
+      - name: P0 gate - RLS tenant isolation
+        run: python tests/p0_gate.py
+
+      - name: Workers run without error
+        run: |
+          python workers/kpi_worker.py --once
+          python workers/alarm_engine.py --once
+
+      - name: Clock gate rejects a bad clock
+        # Guards the edge daemon's most dangerous failure mode (a Pi with
+        # no RTC booting to 1970 and overwriting history) against
+        # regression - see edge/clock.py.
+        run: |
+          python - <<'PY'
+          from datetime import datetime, timezone, timedelta
+          from pathlib import Path
+          import tempfile, sys
+          from edge.clock import ClockGate
+
+          g = ClockGate(Path(tempfile.mkdtemp()) / "clock.json")
+          assert not g.check(datetime(1970, 1, 1, tzinfo=timezone.utc)).ok, "epoch clock must be rejected"
+
+          now = datetime.now(timezone.utc)
+          assert g.check(now).ok, "current time must be accepted"
+          g.observe(now)
+          assert not g.check(now - timedelta(hours=1)).ok, "backwards jump must be rejected"
+          assert g.check(now - timedelta(seconds=30)).ok, "small NTP slew must be tolerated"
+          print("clock gate: all assertions passed")
+          PY
+
+  security:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install pip-audit
+      # Advisory, not blocking: a brand-new CVE in a transitive dependency
+      # should surface loudly without wedging every unrelated PR. Revisit
+      # once someone owns triage.
+      - run: pip-audit -r requirements.txt || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm audit --audit-level=high || true
+        working-directory: frontend
