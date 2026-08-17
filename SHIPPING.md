@@ -1,167 +1,122 @@
-# Shipping Plan — single pilot → ~100 plants
+# Shipping Plan — Airthra Platform
 
-Date: 2026-08-17
-Companion to [AUDIT.md](AUDIT.md) (which catalogues *what is wrong today*). This document is *what has to be true before this runs 100 industrial sites*, in dependency order.
+Last consolidated: 2026-08-17
+Companion to [AUDIT.md](AUDIT.md) (security/completeness findings) and [INDUSTRIAL_READINESS.md](INDUSTRIAL_READINESS.md) (response to the client's industrial-IoT review). This document is the single source of truth for what has shipped, what's still open, and why — superseding the earlier draft-plan/status-update split that had grown redundant (and briefly self-contradictory: an earlier revision listed tenant onboarding as both "blocked" and "done").
 
 ## A note on "foolproof"
 
 Nothing that touches real boilers, real emissions compliance, and real invoices is foolproof, and any plan that claims otherwise is lying. What this plan targets instead:
 
-- **Failures are loud, never silent.** The codebase already holds this line well (no swallowed exceptions, `quality_flag` never faked, OTS stubs explicitly marked). Preserve it.
+- **Failures are loud, never silent.** No swallowed exceptions, `quality_flag` never faked, OTS stubs explicitly marked, QC never inferred from sensor data. Preserved throughout everything below.
 - **Failures are contained.** One plant's edge unit dying, one bad rule, one corrupt payload must not degrade the other 99.
 - **Failures are recoverable.** Backups that are actually restored, migrations that roll back, deploys that revert.
-- **The blast radius of a mistake is bounded by the tenant.** This is the one where the current architecture is weakest — see B2.
+- **The blast radius of a mistake is bounded by the tenant.** The one place this is still weak — see *RLS on readings/kpis* below.
 
 ---
 
-## Phase 0 — Blockers. No customer can be onboarded until these exist.
+## 1. Done, verified live
 
-These are not hardening items. Without them there is no product at 100 sites.
+Everything in this section was tested against the running stack, not just typechecked — migration round-trips (`upgrade → downgrade → upgrade` against live data), curl against every guard/rejection path, and browser verification (real form fills, real file uploads, real clicks) for anything user-facing. Details and exact evidence live in the git history; this is the index.
 
-### 0.1 Real Modbus polling — **not implemented**
-`edge/daemon.py:412` and `edge/mockgen.py:6` are explicit: `RealModbusPoller` does not exist, only the mock sinusoidal generator. Every screenshot, KPI, invoice and alarm in this platform today is computed from simulated data.
-
-Needs: real transducer wiring per the FEED register, `pymodbus` RTU client against the actual RS-485 bus layout (register map per tag), 1-Wire bus enumeration for the DS18B20 strings, SPI for the MAX31865 PT100s, ADS1115 for the 4–20 mA loops, HX711 for the load cells. This is a hardware-in-the-loop project, not a coding task — it cannot be completed without physical access to a unit.
-
-**Until this lands, everything downstream is unvalidated against reality.**
-
-### 0.2 There is no way to onboard a plant or a user
-Verified: no `INSERT INTO plants` or `INSERT INTO users` exists anywhere under `api/`. Plants, sensors and users exist *only* because `seed/seed.py` created them. Adding customer #2 today means running a Python script against the production database by hand — and that same script unconditionally resets the `global_admin` password every run.
-
-Needs: an authenticated admin surface for tenant lifecycle — create plant, define its sensor manifest, create/invite users, scope them to plants, deactivate. Plus the corresponding API routers with `global_admin` gates, and an audit trail of who onboarded what.
-
-This is the single largest *software* gap for a 100-tenant business.
-
-### 0.3 Device provisioning is placeholder
-`scripts/provision_pi.py:339-359` hardcodes the WireGuard server endpoint, public key, and a fixed `10.100.0.0` device IP. Provisioning 100 Raspberry Pis needs: per-device key generation, IP allocation from a pool, per-device MQTT TLS certificates (the current `scripts/mosquitto_add_user.sh` adds one user at a time by hand), enrollment tracking, and a revocation path for a stolen or decommissioned unit.
-
-### 0.4 Password reset / credential lifecycle
-No forgot-password flow, no password change endpoint, no way to rotate a compromised user credential without a DB write. At 100 sites with multiple operators each, this becomes a daily support burden immediately.
-
----
-
-## Phase A — Security hardening (safe to do now, no external decisions needed)
-
-Full findings in [AUDIT.md §2](AUDIT.md). Ordered by exposure:
-
-| # | Item | Why it matters at 100 tenants |
-|---|---|---|
-| A1 | Rate-limit `/auth/login` | Internet-facing auth with zero throttling; bcrypt cost is the only brake |
-| A2 | MinIO bucket → private + presigned URLs | Every tenant's PO PDFs, drawings, invoices are currently world-readable by key |
-| A3 | Bind Postgres/MinIO/MQTT-plaintext to localhost | Compose publishes to `0.0.0.0`; fatal on a cloud VM |
-| A4 | CORS origin from env, not hardcoded | Hardcoded `localhost:3000` — a prod deploy either breaks or gets "fixed" with `*` |
-| A5 | Field length/format validation | No `max_length` anywhere; unbounded request bodies |
-| A6 | `secrets.compare_digest` for webhook secret | Timing side-channel on the Grafana shared secret |
-| A7 | Production guard on `seed/seed.py` | Fixed admin password, silently reset on every run |
-| A8 | Dependency audit in CI (`pip-audit`, `npm audit`) | No supply-chain monitoring at all today |
-
----
-
-## Phase B — Scale to 100 plants
-
-### B1 — Worker N+1 queries (**measured, real**)
-`workers/alarm_engine.py:run_once` evaluates every rule against every plant, and each `(rule, plant)` pair issues its own queries:
-
-- `_active_alarm` → 1 query, `_last_cleared_at` → 1 query, evaluator → 1+ queries
-- the frozen-sensor rule has no `sensor_id`, so it calls `_plant_sensor_ids` then `_readings_since` **per sensor** — 8 queries per plant on its own
-
-At 7 rules × 100 plants this is roughly **2,600 round trips every 10-second cycle (~260 q/s)** purely for alarm evaluation. `workers/kpi_worker.py:149` has the same shape — `compute_for_plant` does one `_latest_reading` per sensor, ~700 queries per cycle at 100 plants.
-
-Fix: replace per-plant/per-sensor lookups with set-based queries (one `DISTINCT ON (plant_id, sensor_id)` latest-reading query for the whole fleet per cycle, one active-alarm query keyed by `(rule_id, plant_id)`), then evaluate in memory. Turns thousands of round trips into single digits.
-
-### B2 — RLS gap on `readings` / `kpis` is a 100-tenant liability
-These two hypertables have **no row-level security** (documented trade-off against TimescaleDB compression, `api/db.py`). The API-layer `require_plant_access` check is the *only* thing preventing cross-tenant sensor data leakage — every other table has RLS as a second net. One future router that forgets the call leaks another customer's emissions data.
-
-Options, in order of preference:
-1. Re-test whether current TimescaleDB still refuses RLS + columnstore together (this was true at build time; may have changed).
-2. If not: move compression to a continuous aggregate and keep RLS on the raw hypertable.
-3. If neither: enforce with a CI check that greps every router touching `readings`/`kpis` for a `require_plant_access` call, plus a cross-tenant 403 regression test. This is the weakest option and should be treated as temporary.
-
-### B3 — Connection pooling is at defaults
-`api/db.py` sets `pool_pre_ping` but no `pool_size`/`max_overflow` — SQLAlchemy defaults to 5+10 per engine, 30 total across the tenant and global engines. Needs to be env-configurable and sized against expected concurrency, with PgBouncer in front once the API runs more than one replica.
-
-### B4 — Ingest throughput
-`ingest/service.py` already batches via `executemany` — good. At 100 plants × 7 sensors × 1 Hz that is ~700 msg/s through a single asyncio process. Needs load testing, then either partitioned consumers by plant range or a queue in front. Do not pre-optimise; measure first.
-
-### B5 — Worker singletons
-`kpi_worker`, `alarm_engine`, `billing_worker`, `archive_worker` are all single-process loops with no leader election. Two copies running double-writes alarms and invoices. Before running more than one instance: advisory locks or a scheduler with a locking backend.
-
-### B6 — Time-series retention economics
-100 plants × 7 sensors × 1 Hz ≈ 22 billion rows/year uncompressed. Compression and retention policies exist in the initial migration; they need to be validated against real cardinality and a real cost target, and continuous aggregates need to serve the history UI rather than raw scans.
-
----
-
-## Phase C — Correctness (needs sign-off, not code)
-
-| Item | Status |
-|---|---|
-| Alarm thresholds contradict the FEED register — `SO2_out` fires at 200 ppm vs the register's **50 ppm compliance trip** | [AUDIT.md §1.1](AUDIT.md), unresolved, **highest priority in this phase** |
-| KOH/K2SO3 level sensors: register works in litres, platform stores percent | Unresolved, needs a units decision |
-| Billing constants (SO2 rate, K2SO3/SO2 mass ratio, gap handling) are documented placeholders | `workers/billing_worker.py:31-36` |
-| OTS blockchain anchoring falls back to a labelled stub proof on network failure | `workers/archive_worker.py:190-225` — confirm downstream consumers check the `is_real` flag |
-| Two-sensor bracket alarms (removal efficiency) unimplementable — engine reads `readings` only, not `kpis` | Extend the engine to evaluate KPI values |
-
----
-
-## Phase D — Operations
-
-- **CI/CD**: no `.github/` exists. The P0–P7 gate scripts are genuine acceptance tests that nothing runs automatically. Wire them to a service-container Postgres.
-- **Backups**: `scripts/restore_drill.py` exists (good instinct — a restore drill, not just a backup). Needs scheduling, offsite storage, and a documented RPO/RTO.
-- **Observability**: no platform-level monitoring. At 100 sites you need per-edge-unit liveness, worker heartbeat, queue depth, and alerting on the alerting system itself.
-- **Per-tenant SLA reporting**: uptime and data-completeness per plant, since billing depends on captured data.
-- **Runbooks**: what an on-call engineer does when an edge unit goes dark, when the alarm engine falls behind, when a bad invoice is issued.
-- **Production Caddyfile**: current config is `tls internal` (dev CA) only.
-
----
-
----
-
-## Status as of 2026-08-17
-
-**Done and verified live:**
+### Security (full findings: [AUDIT.md §2](AUDIT.md))
 
 | Item | Evidence |
 |---|---|
-| A1 login rate limiting | 5 failures → 429 + `Retry-After`; other accounts unaffected |
-| A2 MinIO bucket private | anonymous GET 403 (was 200); presigned GET 200 |
-| A3 infra ports → loopback | compose validated; MQTT TLS/WS left public for edge units |
-| A4 CORS from env | `CORS_ALLOWED_ORIGINS`, wildcard unsupported by design |
-| A5 field length validation | oversized login body → 422 |
-| A6 `compare_digest` | webhook secret |
-| A7 seed production guard | `APP_ENV=production` refuses without `ALLOW_SEED=1` |
-| A8 dependency audit | in CI, advisory |
-| B1 worker N+1 | 2,900 → **6 queries/cycle**, flat in plant count |
-| B3 pool sizing | env-tunable |
-| D/CI | full pipeline: gates, migration idempotency **and** reversibility, clock-gate regression test |
-| Clock trust gate | 6 cases incl. epoch boot, backwards jump, watermark persistence |
-| ML ground truth | 10 one-tap events + `calibration`/`purge` flags |
-| **0.2 Tenant onboarding** | Full loop proven live through the actual browser UI, not just curl: admin creates a plant + sensor manifest → creates a user scoped to it → gets a one-time invite link inline → fresh unauthenticated tab accepts it, sets a password → redirects to `/login` → signs in → lands correctly scoped on that exact plant's dashboard. Cross-tenant access to `goa_pilot_01` correctly 403'd. `seed/seed.py` is no longer the only way to add a customer. |
-| **Contract-driven billing** (enterprise spec Phase 3 / rule #8) | The hardcoded global `SO2_RATE_PER_KG` env var is gone. Every plant bills against its own `contracts` row (base fee + usage rate + uptime-gated bonus/penalty); a plant with no contract is honestly skipped, never billed at a guessed rate — proven live (`nagpur_pilot_03` skipped, `goa_pilot_01`/`pune_pilot_02` billed correctly, including a real negative-total SLA-penalty case). Admin UI on the Billing page: contract table + create/renew form, invoice line-item breakdown. Caught and fixed a real regression while building this: the invoice PDF links were pointing at the MinIO bucket made private earlier this session, with no consumer wired up yet — this was the first consumer, so `admin/invoices` now returns short-lived presigned URLs. Note: a contract's coverage is checked against the *first day* of the billing period, so a contract effective mid-month does not retroactively bill that partial month — no proration logic exists, by design scope, not oversight. |
-| **Document management** (enterprise spec, cross-cutting module) | Generic `documents` table (`entity_type`, `entity_id`) instead of a bespoke `file_url`/`sha256` column pair per table — one upload/list/delete API and one reusable `DocumentsPanel` component, wired into both the Tenants page (per-plant) and the Billing page (per-contract) as proof the polymorphic design actually works across two unrelated entity kinds. First genuine user-file-upload endpoint in the codebase (every prior upload is the server generating its own PDF) — required adding `python-multipart`, a real missing dependency the import error caught. Verified fully through the browser: real `File`/`DataTransfer` upload, presigned download round-trips the exact file content, delete removes it from both Postgres and MinIO. Admin-only surface for now (global_admin/global_read) — a plant operator seeing documents attached to their own plant is a real follow-up, not built in this pass. |
-| **Engineering Change Management** (enterprise spec Module 10) | Formal request → reason → engineering approval → new revision workflow (`bom_change_requests`), additive to the existing direct `/revise` endpoint (which already correctly enforces release-immutability — this adds governance in front of it, not a new immutability mechanism). Caught a real routing bug before it shipped: `GET /erp/boms/change-requests` was registered after the existing `GET /erp/boms/{bom_id}`, so FastAPI would have captured "change-requests" as a bom_id and the new endpoint would never have been reached — fixed by moving it earlier in the route table, with the reason documented inline so it isn't silently re-broken by a future edit. Approving atomically creates the new draft revision (no observable window where a request is "approved" but nothing exists yet) via a helper shared with the direct revise path, so the two entry points can't drift into different behaviour. Verified the full loop through the actual browser: filed a request, rejected it (note required — empty note correctly 422s), filed a second one, approved it, confirmed the original released BOM stayed untouched and the new draft correctly carries `supersedes_bom_id` with items copied. |
-| **Offtake** (enterprise spec Module 04) | A real, previously-unmodeled gap: `qc_records` was already scoped to hardware fabrication QC only — nothing tracked the chemical product (K2SO3) each plant actually produces and sells. New `product_batches`/`buyers` with a linear, DB-CHECK-enforced lifecycle (produced → QC → allocated → dispatched) and a real Certificate of Analysis PDF generator. QC is never inferred from sensor/KPI data — `qc_status` only ever changes via an explicit human action naming an inspector, mirroring the platform's existing readings/kpis honesty rule. Allocation and CoA generation are both blocked until QC has genuinely passed (verified: both 409 before QC, and a failed batch stays permanently locked out of both). Verified the full happy path through the actual browser: created a batch, recorded a QC pass, allocated to a buyer at a rate, dispatched, generated a CoA, and downloaded a genuine 1958-byte PDF (`200`, `application/pdf`) through the presigned link. One transient `500` was hit mid-testing and traced to the API process being mid-restart from an unrelated `Stop-Process` a moment earlier, not an application bug — confirmed by an identical request succeeding cleanly once the server was actually up. |
-| **CRM / lead pipeline** (enterprise spec Commercial section) | Deliberately one table, not a department — the spec is explicit CRM shouldn't become an 11th giant module here. `leads` with a `stage` pipeline (lead → site assessment → proposal → contract sent → won/lost), forward transitions validated at the API layer rather than a rigid DB state machine (a real sales process stalls and un-stalls; a hard-coded "which stage follows which" would fight that). The one thing enforced by the schema itself: `CHECK (stage != 'won' OR converted_plant_id IS NOT NULL)` and the matching check for `lost_reason` — a lead can't be marked won without pointing at a real deployed plant, or lost without saying why. This is what actually closes the loop the spec asks for ("lead → proposal → contract → deployed skid") rather than two systems that both happen to mention customers: `converted_plant_id` references the exact `plants` row created via the tenant-onboarding work earlier this session. Verified live end to end through the actual browser: created a lead, advanced it through the pipeline, and tested both terminal paths — won (rejected 422 without a `converted_plant_id`, rejected 422 for an unknown plant, succeeded against a real plant) and lost (rejected 422 without a reason, succeeded with one) — plus confirmed a closed lead correctly 409s on any further stage change. |
+| Login rate limiting | Per-IP + per-email limiter (`api/ratelimit.py`); verified 5 failures → `429` + `Retry-After`, unrelated accounts unaffected |
+| MinIO bucket → private + presigned URLs | Verified anonymous GET `403` (was `200`), presigned GET `200`. Wired into every consumer added after: invoices, documents, CoA PDFs |
+| Infra ports bound to loopback | Postgres/MinIO/Grafana/MQTT-plaintext on `127.0.0.1`; MQTT TLS/WS deliberately left public for remote edge units |
+| CORS from env, not hardcoded | `CORS_ALLOWED_ORIGINS`; wildcard unsupported by design (credentialed CORS + `*` is a real footgun) |
+| Field length/format validation | `Field(max_length=...)` on request bodies; verified oversized login body → `422` |
+| `secrets.compare_digest` for webhook secret | Timing-safe comparison on the Grafana shared secret |
+| Production guard on `seed/seed.py` | Refuses to run when `APP_ENV` names a non-dev environment unless `ALLOW_SEED=1` — verified both the refusal and the normal dev path |
+| Dependency audit in CI | `pip-audit` / `npm audit`, advisory (doesn't block PRs on a fresh transitive CVE) |
+| DB connection pool sizing | Env-tunable (`DB_POOL_SIZE`/`DB_POOL_MAX_OVERFLOW`) instead of SQLAlchemy defaults |
 
-**Still open, and why:**
+### Scale
 
-| Item | Why not done |
+| Item | Evidence |
 |---|---|
-| 0.1 Real Modbus | Hardware-gated. Needs physical access to a unit. |
-| ~~0.2 Tenant onboarding~~ | **Done.** See below — no longer the biggest blocker. |
-| 0.3 / #5 Tailscale provisioning | Needs an account and infra decisions. |
-| 0.4 Password reset | 0.2 built the *invite* half (new user sets a password via token). Forgot-password for an *existing* user needs the same token machinery reused as a "reset" flow, plus an email-sending path (invite links are currently hand-copied by an admin, which doesn't scale to self-service reset) - the missing piece is delivery, not the token design. |
-| B2 RLS on readings/kpis | Needs the TimescaleDB compression question re-tested first. |
-| B4 buffer load test | Needs a long-outage soak; can't be faked. |
-| B5 worker leader election | Only matters once >1 replica runs. |
-| #6 archive scheduler | One systemd timer — deploy-target dependent. |
-| Phase C thresholds/constants | **Process-engineering sign-off, not a code change.** |
+| Alarm engine N+1 queries | Was ~2,900 queries/10s cycle at 100 plants (measured). `FleetSnapshot` loads the whole fleet in 4 queries; evaluators read from memory. Measured after: **6 queries/cycle, flat in plant count** |
+| KPI worker N+1 queries | Same fix, one `DISTINCT ON` query instead of one round trip per (plant, sensor) |
 
-## Suggested execution order
+### Operations / CI
 
-1. **Phase A** in full — cheap, safe, no dependencies. *(in progress)*
-2. **B1** worker N+1 — the clearest scale win, self-contained. *(in progress)*
-3. **D/CI** — so everything after this is regression-tested.
-4. **0.2 tenant onboarding** — the biggest software blocker; gates commercial rollout.
-5. **B2 RLS** — before real multi-tenant data exists, not after.
-6. **Phase C** — with process-engineering sign-off.
-7. **0.1 Modbus / 0.3 provisioning** — hardware-gated, run in parallel with the above.
+| Item | Evidence |
+|---|---|
+| CI pipeline (`.github/workflows/ci.yml`) | Frontend typecheck/lint/build; backend against a real TimescaleDB service container — migration idempotency *and* reversibility, seed idempotency, P0 RLS gate, both workers run clean, a regression test pinning the edge clock gate |
+
+### Edge / data integrity ([INDUSTRIAL_READINESS.md](INDUSTRIAL_READINESS.md) has the full point-by-point response to the client's review)
+
+| Item | Evidence |
+|---|---|
+| Edge clock trust gate (`edge/clock.py`) | The Pi has no RTC and can boot to 1970 after a power cut; because the daemon buffers-and-backfills, a wrong-clock timestamp was previously durable enough to overwrite real history. Now gated on a sanity floor + a disk-persisted monotonic watermark + NTP/RTC verification. Verified all 6 cases: epoch boot rejected, backwards jump rejected, small NTP slew tolerated, watermark survives restart |
+| ML ground-truth events | Ten one-tap operator actions (`QuickEventBar.tsx`) replacing a free-text form that couldn't serve as training labels; verified a real click writes a structured, tagged row |
+| `quality_flag` calibration/purge states | Corrected an earlier wrong claim (see git history for the correction) — the real gap was narrower than first reported; `calibration`/`purge` added to close it |
+
+### Commercial / ERP modules (enterprise spec, all ten core modules now covered in some real form)
+
+| Module | What shipped |
+|---|---|
+| **Tenant onboarding** | `POST /admin/plants` (atomic plant + sensor manifest), `POST /admin/users` (invite-token flow — no human ever transmits a real password), `audit_log` on every mutation. Full loop proven live through the browser: create plant → create user → invite link → fresh unauthenticated tab accepts it → signs in → lands correctly scoped; cross-tenant access to another plant correctly `403`s. `seed/seed.py` is no longer the only way to add a customer |
+| **Contract-driven billing** | The hardcoded global `SO2_RATE_PER_KG` env var is gone. Every plant bills against its own `contracts` row (base fee + usage rate + uptime-gated bonus/penalty); a plant with no contract is honestly skipped, never billed at a guessed rate. Verified live, including a real negative-total SLA-penalty case computed correctly from the seeded terms |
+| **Document management** | Generic `documents` table (`entity_type`, `entity_id`) instead of a bespoke column pair per table; one upload/list/delete API and one reusable panel wired into two unrelated entity kinds (plants, contracts) to prove the design generalizes. First genuine user-file-upload endpoint in the codebase — surfaced a real missing dependency (`python-multipart`) via the import error |
+| **Engineering Change Management** | Formal request → reason → approval → new revision (`bom_change_requests`), additive to the existing (already-correct) release-immutability. Caught a real routing bug before shipping: a new endpoint would have been silently unreachable because FastAPI matches routes in registration order — fixed and documented inline so it can't silently regress |
+| **Offtake** | The chemical product each plant produces (K2SO3) had no tracking at all — the existing `qc_records` table only covers hardware fabrication QC. New `product_batches`/`buyers` with a DB-CHECK-enforced lifecycle (produced → QC → allocated → dispatched) and a real Certificate of Analysis PDF generator. QC status can only ever be set by a named human, never inferred from sensor data. Verified by downloading a genuine PDF through a presigned link |
+| **CRM / lead pipeline** | Deliberately one table, not a department, per the spec's own scope guidance. A lead can only be marked "won" by pointing at a real `plants` row (the same row tenant onboarding creates) — closing the lead → contract → deployed-skid loop as one traceable chain instead of two systems that coincidentally mention customers |
+| Fleet & Telemetry, Chemical Ops, Supply Chain/Logistics, Asset Intelligence, Customer Platform | Pre-existing from earlier phases of this build (P0–P7) — telemetry ingestion, fleet dashboard, materials/inventory, logistics trips, alarm engine, BOM/fabrication/QC, client dashboard |
+
+### UI
+
+| Item | Evidence |
+|---|---|
+| Motion vocabulary | Re-extracted airthra.com's actual computed styles rather than working from memory; adopted the brand's easing curves verbatim, cut its marketing-hero durations to interface speed (140ms). Staggered entrances, live-data pulse, reduced-motion respected throughout |
+| Live page instrument register | Tiles grouped by subsystem with FEED register tag IDs, mounting/purpose on hover, trip thresholds as reference text, honest "N of 40 tags wired up" coverage line |
+
+---
+
+## 2. Open — hardware-gated (cannot be completed without physical access)
+
+- **Real Modbus polling.** `edge/daemon.py`/`edge/mockgen.py` are explicit: only the mock generator exists. Every reading, KPI, alarm, and invoice in this platform today is computed from simulated data. This is a hardware-in-the-loop project, not a coding task.
+- **DS3231 RTC modules.** The clock trust gate (above) makes a missing RTC *loud* instead of silently corrupting data, but software cannot invent the correct time — the hardware purchase is still required per unit.
+- **Device provisioning.** `scripts/provision_pi.py` hardcodes WireGuard server details and a fixed device IP. Real fleet provisioning needs per-device key generation, IP allocation from a pool, per-device MQTT TLS certs, and a revocation path — see the next section for the Tailscale recommendation this depends on.
+
+## 3. Open — needs an external account or infrastructure decision
+
+- **Tailscale (or equivalent) for zero-trust remote access.** Recommended over hand-rolled WireGuard specifically because revocation (a stolen or decommissioned unit) is the hard part at fleet scale, not the tunnel itself. Needs an account and a decision, not code.
+- **Self-service password reset.** The *invite* half is built (a new user sets their own password via a one-time token). Forgot-password for an *existing* user needs the same token machinery reused as a reset flow, plus an actual email-sending path — invite links today are hand-copied by an admin, which doesn't scale to self-service. The missing piece is delivery infrastructure, not the token design.
+- **Production TLS / Caddyfile.** Current config is `tls internal` (a local dev CA). A real deployment needs a separate Caddyfile with a real ACME/Let's Encrypt directive.
+- **Hosting target.** Per the earlier discussion in this session: a private, invite-only deployment is the safe next step once the above is settled — not a public listen-on-the-internet deployment while the rate limiter is still single-process and there's no real payment/production credential rotation story.
+
+## 4. Open — needs process-engineering sign-off, not a code change
+
+- **Alarm thresholds contradict the FEED instrument register.** `SO2_out` fires at 200 ppm; the register's actual compliance trip is 50 ppm. The frontend's reference display was corrected to the register's values; the *live alarm rules* were deliberately left untouched — retuning a safety/compliance trip point is not a decision to make unilaterally. See [AUDIT.md §1.1](AUDIT.md).
+- **KOH/K2SO3 level units.** The FEED register works in litres; the platform stores percent. Not converted — needs a decision on which is the source of truth.
+- **Billing/process constants.** SO2-to-K2SO3 mass ratio, contract performance-bonus/penalty thresholds seeded as illustrative pilot defaults — need real negotiated/measured values before being relied on commercially.
+- **Contract mid-month proration.** A contract's coverage is checked against the *first day* of the billing period, so a contract effective mid-month doesn't retroactively bill that partial month. No proration logic exists — this is a scope decision (build proration, or always backdate `effective_from`), not a bug.
+
+## 5. Open — deliberately not built, and why
+
+- **ML predictive maintenance / predictive logistics / "optimization."** No real historical data exists to train on — everything in this database is seed fixtures or a few hours of mock sensor readings. A model "trained" on that would produce numbers that look like predictions but aren't, on a platform whose entire design principle is never faking data. What *is* real: rule-based predictive maintenance (the alarm engine — the deterministic approach the spec itself calls acceptable) and deterministic predictive logistics (burn-rate/days-remaining, already built).
+- **Full GL/AR/AP accounting.** Out of proportion to build from scratch alongside everything else this session; the spec itself suggests integrating an external accounting system rather than reproducing Tally/Odoo.
+- **HazOp / formal EHS workflows.** Not started.
+- **Offline-capable field app.** Not started.
+
+## 6. Architecture notes carried forward (real engineering work, not yet started)
+
+- **RLS gap on `readings`/`kpis`.** These two hypertables have no row-level security (a documented trade-off against TimescaleDB compression). The API-layer `require_plant_access` check is the *only* thing preventing cross-tenant sensor data leakage on these two tables — every other table has RLS as a second net. Options in order of preference: (1) re-test whether the current TimescaleDB version still refuses RLS + columnstore together, (2) move compression to a continuous aggregate and keep RLS on the raw hypertable, (3) failing both, a CI check that greps every router touching these tables for the access check, plus a cross-tenant regression test — the weakest option, temporary only.
+- **Worker singletons.** `kpi_worker`, `alarm_engine`, `billing_worker`, `archive_worker` are single-process loops with no leader election. Running more than one instance double-writes alarms/invoices. Needs advisory locks or a scheduler with a locking backend before scaling workers horizontally.
+- **Ingest throughput at 100 plants.** `ingest/service.py` already batches via `executemany`. At 100 plants × 7 sensors × 1 Hz that's ~700 msg/s through a single asyncio process — needs load testing before assuming it holds, then partitioned consumers or a queue in front if it doesn't.
+- **Time-series retention economics.** 100 plants × 7 sensors × 1 Hz ≈ 22 billion rows/year uncompressed. Compression/retention policies exist from the initial migration but need validation against real cardinality and a real cost target.
+- **Buffer load test.** The edge daemon's SQLite store-and-forward buffer is architecturally sound (verified working live this session) but its behaviour under a genuinely long outage, and under a full disk, has not been soak-tested — can't be faked, needs a real long-running test.
+- **Archive worker scheduling.** `workers/archive_worker.py` does real OpenTimestamps anchoring with atomic upload verification, but nothing invokes it on a schedule — needs one systemd timer (or equivalent), deploy-target dependent.
+
+---
+
+## Suggested execution order from here
+
+1. **RLS on readings/kpis** (§6) — before more real multi-tenant data accumulates, not after.
+2. **Tailscale + device provisioning** (§3, §2) — unblocks real fleet rollout once an account exists.
+3. **Process-engineering sign-off** (§4) — alarm thresholds and unit decisions should not wait on code; they're the highest-consequence open items.
+4. **Self-service password reset** (§3) — once there's an email-sending path, cheap to finish.
+5. **Worker leader election / archive scheduling** (§6) — before running more than one instance of anything.
+6. **Real Modbus / RTC hardware** (§2) — hardware-gated, run in parallel with everything above.
