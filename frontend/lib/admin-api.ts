@@ -26,6 +26,7 @@ import type {
   CreateBatchInput,
   CreateBuyerInput,
   CreateContractInput,
+  CreateLeadInput,
   CreatePlantInput,
   CreateUserInput,
   CreateUserResult,
@@ -35,6 +36,9 @@ import type {
   FleetResponse,
   InvoicesResponse,
   Invoice,
+  Lead,
+  LeadsResponse,
+  LeadStage,
   MetricsResponse,
   MrvExportResponse,
   ProductBatch,
@@ -249,4 +253,20 @@ export function dispatchBatch(batchId: string) {
 }
 export function generateCoa(batchId: string) {
   return request<ProductBatch>(`/admin/offtake/batches/${batchId}/coa`, { method: "POST" });
+}
+
+// --- CRM (api/routers/admin_crm.py) ---
+
+export function listLeads(stage?: LeadStage) {
+  const suffix = stage ? `?stage=${stage}` : "";
+  return request<LeadsResponse>(`/admin/leads${suffix}`);
+}
+export function createLead(body: CreateLeadInput) {
+  return request<Lead>("/admin/leads", { method: "POST", body: JSON.stringify(body) });
+}
+export function updateLeadStage(
+  leadId: string,
+  body: { stage: LeadStage; lost_reason?: string | null; converted_plant_id?: string | null },
+) {
+  return request<Lead>(`/admin/leads/${leadId}/stage`, { method: "PATCH", body: JSON.stringify(body) });
 }

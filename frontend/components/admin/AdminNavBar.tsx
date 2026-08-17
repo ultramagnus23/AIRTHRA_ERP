@@ -13,6 +13,7 @@ import { logout } from "@/lib/api";
 // though they share the same "Airthra." mark.
 const LEFT_TABS = [
   { href: "/fleet", label: "Fleet" },
+  { href: "/leads", label: "Leads" },
   { href: "/triage", label: "Triage" },
   { href: "/metrics", label: "Metrics" },
   { href: "/logistics", label: "Logistics" },

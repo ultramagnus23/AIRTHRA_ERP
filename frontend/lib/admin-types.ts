@@ -188,6 +188,40 @@ export interface CreateBatchInput {
   qty_kg: number;
 }
 
+export type LeadStage = "lead" | "site_assessment" | "proposal" | "contract_sent" | "won" | "lost";
+
+export interface Lead {
+  id: string;
+  company_name: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  source: string | null;
+  stage: LeadStage;
+  estimated_boiler_capacity_tpd: number | null;
+  notes: string | null;
+  lost_reason: string | null;
+  converted_plant_id: string | null;
+  assigned_to: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadsResponse {
+  leads: Lead[];
+}
+
+export interface CreateLeadInput {
+  company_name: string;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  source?: string | null;
+  estimated_boiler_capacity_tpd?: number | null;
+  notes?: string | null;
+}
+
 export type FleetColor = "green" | "yellow" | "red" | "gray";
 
 export interface FleetEntry {
