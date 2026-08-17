@@ -20,6 +20,7 @@ const LEFT_TABS = [
 const RIGHT_TABS = [
   { href: "/risk", label: "Risk" },
   { href: "/billing", label: "Billing" },
+  { href: "/offtake", label: "Offtake" },
   { href: "/mrv", label: "MRV Export" },
   { href: "/tenants", label: "Tenants" },
 ];

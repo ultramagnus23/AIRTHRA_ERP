@@ -17,9 +17,14 @@ import type {
   AdminPlantsResponse,
   AdminUsersResponse,
   AuditLogResponse,
+  BatchesResponse,
   BurnRatesResponse,
+  Buyer,
+  BuyersResponse,
   Contract,
   ContractsResponse,
+  CreateBatchInput,
+  CreateBuyerInput,
   CreateContractInput,
   CreatePlantInput,
   CreateUserInput,
@@ -32,6 +37,7 @@ import type {
   Invoice,
   MetricsResponse,
   MrvExportResponse,
+  ProductBatch,
   RiskScoresResponse,
 } from "./admin-types";
 
@@ -208,4 +214,39 @@ export async function deleteDocument(documentId: string): Promise<void> {
   if (!res.ok && res.status !== 204) {
     throw new AdminApiError(res.status, res.statusText);
   }
+}
+
+// --- Offtake (api/routers/admin_offtake.py) ---
+
+export function listBuyers() {
+  return request<BuyersResponse>("/admin/offtake/buyers");
+}
+export function createBuyer(body: CreateBuyerInput) {
+  return request<Buyer>("/admin/offtake/buyers", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function listBatches(params?: { plant_id?: string; status?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.plant_id) qs.set("plant_id", params.plant_id);
+  if (params?.status) qs.set("status", params.status);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<BatchesResponse>(`/admin/offtake/batches${suffix}`);
+}
+export function createBatch(body: CreateBatchInput) {
+  return request<ProductBatch>("/admin/offtake/batches", { method: "POST", body: JSON.stringify(body) });
+}
+export function recordBatchQc(
+  batchId: string,
+  body: { passed: boolean; inspector: string; result?: string | null; notes?: string | null },
+) {
+  return request<ProductBatch>(`/admin/offtake/batches/${batchId}/qc`, { method: "POST", body: JSON.stringify(body) });
+}
+export function allocateBatch(batchId: string, body: { buyer_id: string; rate_inr_per_kg?: number | null }) {
+  return request<ProductBatch>(`/admin/offtake/batches/${batchId}/allocate`, { method: "POST", body: JSON.stringify(body) });
+}
+export function dispatchBatch(batchId: string) {
+  return request<ProductBatch>(`/admin/offtake/batches/${batchId}/dispatch`, { method: "POST" });
+}
+export function generateCoa(batchId: string) {
+  return request<ProductBatch>(`/admin/offtake/batches/${batchId}/coa`, { method: "POST" });
 }

@@ -124,6 +124,70 @@ export interface DocumentsResponse {
   documents: DocumentRecord[];
 }
 
+export interface Buyer {
+  id: string;
+  name: string;
+  gstin: string | null;
+  address: string | null;
+  state_code: string | null;
+  contact: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+}
+
+export interface BuyersResponse {
+  buyers: Buyer[];
+}
+
+export interface CreateBuyerInput {
+  name: string;
+  gstin?: string | null;
+  address?: string | null;
+  state_code?: string | null;
+  contact?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+}
+
+export type BatchQcStatus = "pending" | "passed" | "failed";
+export type BatchStatus = "produced" | "allocated" | "dispatched";
+
+export interface ProductBatch {
+  id: string;
+  plant_id: string;
+  batch_no: string;
+  product_name: string;
+  qty_kg: number;
+  produced_at: string;
+  qc_status: BatchQcStatus;
+  qc_result: string | null;
+  qc_inspector: string | null;
+  qc_notes: string | null;
+  qc_at: string | null;
+  status: BatchStatus;
+  buyer_id: string | null;
+  rate_inr_per_kg: number | null;
+  allocated_at: string | null;
+  dispatched_at: string | null;
+  coa_sha256: string | null;
+  coa_generated_at: string | null;
+  coa_download_url: string | null;
+  created_at: string;
+}
+
+export interface BatchesResponse {
+  batches: ProductBatch[];
+}
+
+export interface CreateBatchInput {
+  plant_id: string;
+  batch_no: string;
+  product_name: string;
+  qty_kg: number;
+}
+
 export type FleetColor = "green" | "yellow" | "red" | "gray";
 
 export interface FleetEntry {
