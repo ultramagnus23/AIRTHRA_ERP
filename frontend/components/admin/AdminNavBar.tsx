@@ -21,6 +21,7 @@ const RIGHT_TABS = [
   { href: "/risk", label: "Risk" },
   { href: "/billing", label: "Billing" },
   { href: "/mrv", label: "MRV Export" },
+  { href: "/tenants", label: "Tenants" },
 ];
 
 export default function AdminNavBar({ role }: { role: string }) {

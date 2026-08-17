@@ -9,6 +9,89 @@
 // concurrent ERP/driver agents editing that file.
 import type { AlarmSeverity, AlarmState } from "./types";
 
+// DB roles (users.role's CHECK constraint) - not the JWT roles. The three
+// plant_* roles all currently decode to the same JWT role (tenant_read,
+// see api/security.py DB_ROLE_TO_JWT_ROLE) and so behave identically
+// today; the distinct DB values are kept for when that changes, and
+// exposed here for accuracy rather than collapsing them in the UI too.
+export type DbRole = "global_admin" | "global_read" | "plant_admin" | "plant_operator" | "plant_viewer";
+
+export interface AdminPlantSummary {
+  plant_id: string;
+  name: string;
+  commissioning_date: string | null;
+  sensor_count: number;
+  user_count: number;
+}
+
+export interface AdminPlantsResponse {
+  plants: AdminPlantSummary[];
+}
+
+export interface SensorInput {
+  sensor_id: string;
+  tag: string;
+  kind: string;
+  unit: string;
+  min_valid?: number | null;
+  max_valid?: number | null;
+}
+
+export interface CreatePlantInput {
+  plant_id: string;
+  name: string;
+  lat?: number | null;
+  lon?: number | null;
+  ambient_climate?: string | null;
+  boiler_capacity_tpd?: number | null;
+  fuel_type_primary?: string | null;
+  commissioning_date?: string | null;
+  timezone_display?: string;
+  sensors: SensorInput[];
+}
+
+export interface AdminUserSummary {
+  user_id: string;
+  email: string;
+  role: DbRole;
+  created_at: string;
+  plant_ids: string[];
+  invite_pending: boolean;
+}
+
+export interface AdminUsersResponse {
+  users: AdminUserSummary[];
+}
+
+export interface CreateUserInput {
+  email: string;
+  role: DbRole;
+  plant_ids: string[];
+}
+
+export interface CreateUserResult {
+  user_id: string;
+  email: string;
+  role: DbRole;
+  plant_ids: string[];
+  invite_token: string;
+  invite_expires_at: string;
+}
+
+export interface AuditLogEntry {
+  log_id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  detail: Record<string, unknown>;
+  created_at: string;
+  actor_email: string | null;
+}
+
+export interface AuditLogResponse {
+  entries: AuditLogEntry[];
+}
+
 export type FleetColor = "green" | "yellow" | "red" | "gray";
 
 export interface FleetEntry {

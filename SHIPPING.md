@@ -135,15 +135,16 @@ Options, in order of preference:
 | D/CI | full pipeline: gates, migration idempotency **and** reversibility, clock-gate regression test |
 | Clock trust gate | 6 cases incl. epoch boot, backwards jump, watermark persistence |
 | ML ground truth | 10 one-tap events + `calibration`/`purge` flags |
+| **0.2 Tenant onboarding** | Full loop proven live through the actual browser UI, not just curl: admin creates a plant + sensor manifest → creates a user scoped to it → gets a one-time invite link inline → fresh unauthenticated tab accepts it, sets a password → redirects to `/login` → signs in → lands correctly scoped on that exact plant's dashboard. Cross-tenant access to `goa_pilot_01` correctly 403'd. `seed/seed.py` is no longer the only way to add a customer. |
 
 **Still open, and why:**
 
 | Item | Why not done |
 |---|---|
 | 0.1 Real Modbus | Hardware-gated. Needs physical access to a unit. |
-| 0.2 Tenant onboarding | Genuinely large (schema + routers + UI + audit trail). Deserves focused effort, not a rushed pass. **Biggest software blocker.** |
+| ~~0.2 Tenant onboarding~~ | **Done.** See below — no longer the biggest blocker. |
 | 0.3 / #5 Tailscale provisioning | Needs an account and infra decisions. |
-| 0.4 Password reset | Depends on 0.2's user-management surface. |
+| 0.4 Password reset | 0.2 built the *invite* half (new user sets a password via token). Forgot-password for an *existing* user needs the same token machinery reused as a "reset" flow, plus an email-sending path (invite links are currently hand-copied by an admin, which doesn't scale to self-service reset) - the missing piece is delivery, not the token design. |
 | B2 RLS on readings/kpis | Needs the TimescaleDB compression question re-tested first. |
 | B4 buffer load test | Needs a long-outage soak; can't be faked. |
 | B5 worker leader election | Only matters once >1 replica runs. |

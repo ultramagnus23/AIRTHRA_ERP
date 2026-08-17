@@ -27,6 +27,7 @@ from . import config as _config
 from . import mqtt_bridge
 from .routers import (
     admin_alarms,
+    admin_tenants,
     admin_billing,
     admin_fleet,
     admin_logistics,
@@ -119,6 +120,7 @@ app.include_router(admin_risk.router)
 app.include_router(admin_billing.router)
 app.include_router(admin_mrv.router)
 app.include_router(admin_alarms.router)
+app.include_router(admin_tenants.router)
 
 
 @app.get("/health")

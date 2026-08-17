@@ -14,7 +14,13 @@
 // only render.
 import type {
   AdminAlarmsResponse,
+  AdminPlantsResponse,
+  AdminUsersResponse,
+  AuditLogResponse,
   BurnRatesResponse,
+  CreatePlantInput,
+  CreateUserInput,
+  CreateUserResult,
   FleetResponse,
   InvoicesResponse,
   Invoice,
@@ -101,4 +107,39 @@ export function exportMrv(plantId: string, period: string) {
     `/admin/mrv_export/${plantId}?period=${encodeURIComponent(period)}`,
     { method: "POST" },
   );
+}
+
+// --- Tenant onboarding (api/routers/admin_tenants.py) ---
+
+export function listAdminPlants() {
+  return request<AdminPlantsResponse>("/admin/plants");
+}
+
+export function createPlant(body: CreatePlantInput) {
+  return request<{ plant_id: string; sensors_created: number }>("/admin/plants", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function listAdminUsers() {
+  return request<AdminUsersResponse>("/admin/users");
+}
+
+export function createUser(body: CreateUserInput) {
+  return request<CreateUserResult>("/admin/users", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function reinviteUser(userId: string) {
+  return request<{ invite_token: string; invite_expires_at: string }>(
+    `/admin/users/${userId}/reinvite`,
+    { method: "POST" },
+  );
+}
+
+export function getAuditLog(limit: number = 100) {
+  return request<AuditLogResponse>(`/admin/audit-log?limit=${limit}`);
 }
