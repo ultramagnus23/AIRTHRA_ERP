@@ -53,3 +53,16 @@ MQTT_READINGS_TOPIC_FILTER = "plants/+/readings"
 # --- API server ---
 API_HOST = os.environ.get("API_HOST", "127.0.0.1")
 API_PORT = int(os.environ.get("API_PORT", "8000"))
+
+# Comma-separated list of origins allowed to make credentialed browser
+# requests. Defaults to the local Next.js dev server so a fresh checkout
+# works with no config; a real deployment MUST set CORS_ALLOWED_ORIGINS to
+# its own frontend origin. Deliberately parsed as an explicit list rather
+# than supporting "*" - allow_credentials=True with a wildcard origin is
+# rejected by browsers anyway, and accepting the string would invite
+# someone to "fix" a prod CORS error by opening it up completely.
+CORS_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    if o.strip()
+]

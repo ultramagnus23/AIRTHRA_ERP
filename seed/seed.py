@@ -32,6 +32,27 @@ if not DATABASE_URL:
     print("ERROR: DATABASE_URL is not set (check .env)", file=sys.stderr)
     sys.exit(1)
 
+# Production guard. This script creates a global_admin account with a
+# fixed, publicly-documented password AND resets that password on every
+# re-run (see the users UPSERT below) - harmless in dev, catastrophic if
+# it is ever pointed at a real deployment, whether by a stray env var, a
+# copy-pasted command, or a CI job with the wrong DATABASE_URL.
+#
+# Refuses to run when APP_ENV names a non-dev environment unless the
+# operator explicitly opts in with ALLOW_SEED=1, so the failure mode is a
+# hard stop rather than a silently reset admin credential.
+_APP_ENV = os.environ.get("APP_ENV", "dev").strip().lower()
+_NON_DEV_ENVS = {"prod", "production", "staging", "stage", "uat"}
+if _APP_ENV in _NON_DEV_ENVS and os.environ.get("ALLOW_SEED") != "1":
+    print(
+        f"REFUSING TO SEED: APP_ENV={_APP_ENV!r} is not a development environment.\n"
+        "This script creates a global_admin with a fixed dev password and resets it on\n"
+        "every run. If you genuinely intend to seed this database, re-run with\n"
+        "ALLOW_SEED=1 set.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
 
 COMPANY = {
     "name": "Airthra Research Private Limited",

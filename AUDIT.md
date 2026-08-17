@@ -25,7 +25,23 @@ Rather than fake a bracket check by disguising it as two unrelated rules, [`work
 **Not implemented, blocked on hardware/schema:**
 - Any tree requiring PT-01 (vacuum), VFD-P101 current, DP-101, LE-01, or the other ~34 FEED tags with no corresponding live sensor in this platform.
 - True two-sensor bracket comparisons (e.g. "SO2 removal efficiency" as `SO2_out/SO2_in`) — the KPI `so2_removal_efficiency` already computes this ratio in `workers/kpi_worker.py`, but `alarm_rules`/`alarm_engine.py` currently only reads `readings`, not `kpis`. Extending the engine to alarm off KPI values (not just raw readings) would be the correct way to implement the rest of Section 3's trees faithfully — flagged as outstanding work below, not built here.
-- **Numeric thresholds used above (pH 7.5, SO2_out 200ppm, temp_C 60°C, flow rate 5/s, KOH tank 15%) are illustrative pilot-plant setpoints, not transcribed from a FEED setpoint table** — no exact alarm-limit table was available. These need process-engineering sign-off before they're relied on to page anyone.
+- **Numeric thresholds used above (pH 7.5, SO2_out 200ppm, temp_C 60°C, flow rate 5/s, KOH tank 15%) are illustrative pilot-plant setpoints, not transcribed from a FEED setpoint table** — no exact alarm-limit table was available at the time. **This has since been superseded — see 1.1.**
+
+### 1.1 Seeded alarm thresholds contradict the FEED instrument register — **[High], unresolved**
+
+The FEED instrument register (the full ~40-tag table with per-tag normal ranges and trip thresholds) does specify exact setpoints, and they disagree with both the seeded alarm rules and the frontend's `SENSOR_MANIFEST`. The frontend manifest has been corrected to the register's values; **the alarm rules have NOT been changed** — retuning live trip points is a process-engineering decision, not a code cleanup.
+
+| Sensor | Register tag | Register normal | Register trip | Seeded rule fires at | Gap |
+|---|---|---|---|---|---|
+| `SO2_out` | AE-02 | 5–25 ppm | **>50 ppm — TRIP** | >200 ppm | **4× too loose.** Stack could sit at 180 ppm — 3.6× the compliance trip — with nothing raised. Highest-priority item here. |
+| `pH` | AT-02 | 8.5–9.5 | <8.0 dose KOH | <7.5 | Fires half a pH unit late |
+| `SO2_in` | AT-01 | 200–800 ppm | >2000 ppm | z-score spike only | No absolute high-sulfur alarm exists |
+| `temp_C` | TE-01 | 55–65 °C | **≥70 °C — HARD TRIP** | >60 °C | Fires early (nuisance risk), and no hard-trip tier |
+| `level_KOH_tank` | LE-03 | 200–1000 L | <150 L | <15 % | **Unit mismatch** — register is litres, platform stores percent |
+| `level_K2SO3_tank` | LE-02 | 50–950 L | >900 L | none | No rule; also unit mismatch |
+| `flow` | FT-01 | — | — | rate >5/s | Tag not in the register at all; platform's own range |
+
+Two follow-ups needed: (a) retune the six seeded rules to the register's setpoints once a process engineer signs off, and (b) decide the litres-vs-percent question for both level sensors — the platform currently stores percent while the register, the procurement logic, and the tote-changeout trigger all reason in litres. Neither is safe to change unilaterally, so both are left as-is and flagged here.
 
 ---
 

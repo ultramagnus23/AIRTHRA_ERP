@@ -7,8 +7,13 @@ from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    # Bounded so an unauthenticated caller can't force arbitrarily large
+    # request bodies (or arbitrarily expensive bcrypt input) through the
+    # one endpoint that accepts traffic before any auth check. 254 is the
+    # RFC 5321 maximum email length; the password cap is well above any
+    # real passphrase but far below a useful abuse payload.
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=1024)
 
 
 class LoginResponse(BaseModel):

@@ -22,9 +22,14 @@ const RIGHT_TABS = [
 export default function ClientNavBar({
   plantId,
   plantIds,
+  isAdmin = false,
 }: {
   plantId: string;
   plantIds: string[];
+  /** global_admin/global_read viewing a plant from the admin Fleet page,
+   * not a scoped tenant_read user - shows a way back to the admin console
+   * instead of the (empty, for global roles) plant switcher. */
+  isAdmin?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -70,7 +75,14 @@ export default function ClientNavBar({
       >
         {/* left zone */}
         <div className="flex items-center gap-1 justify-self-start">
-          {plantIds.length > 1 ? (
+          {isAdmin ? (
+            <Link
+              href="/fleet"
+              className="mr-2 rounded-full border border-line px-2.5 py-1 font-mono text-xs text-mist hover:text-fg"
+            >
+              ← Fleet
+            </Link>
+          ) : plantIds.length > 1 ? (
             <select
               defaultValue={plantId}
               onChange={(e) => router.push(`/${e.target.value}`)}

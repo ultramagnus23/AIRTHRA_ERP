@@ -140,26 +140,165 @@ export interface AlarmsResponse {
   alarms: Alarm[];
 }
 
-/** Static sensor manifest - not exposed by any endpoint, mirrors seed/seed.py SENSORS. */
+/** Instrument subsystems, per the FEED instrument register's own grouping. */
+export type Subsystem = "gas_path" | "absorber_loop" | "product_loop";
+
+export const SUBSYSTEM_LABELS: Record<Subsystem, string> = {
+  gas_path: "Gas path, emissions & safety",
+  absorber_loop: "Absorber & solvent loop",
+  product_loop: "Product & reagent inventory",
+};
+
+/** Static sensor manifest - not exposed by any endpoint, mirrors seed/seed.py SENSORS.
+ *
+ * Tag IDs, mounting locations, diagnostic purposes and normal/trip ranges are
+ * transcribed from the FEED instrument register. Where the register and this
+ * platform disagree, the register wins and the divergence is recorded in
+ * `note` rather than silently reconciled - see AUDIT.md. All of this is
+ * PRESENTATIONAL reference context only: nothing here decides whether a
+ * reading is in alarm. That is the alarm engine's job (workers/alarm_engine.py,
+ * surfaced via the alarms API), per the platform rule that business logic is
+ * never computed in the frontend.
+ */
 export interface SensorMeta {
   sensor_id: string;
   label: string;
   unit: string;
+  /** FEED register tag (AT-01, AE-02, ...). The identifier a field engineer reads. */
+  tag: string;
+  /** Sensor hardware + signal path, per the register. */
+  hardware: string;
+  /** Physical mounting location, per the register. */
+  location: string;
+  /** What this instrument is diagnostically for. */
+  purpose: string;
+  subsystem: Subsystem;
   /** Engineering min/max, mirrors sensors.min_valid/max_valid in seed/seed.py. Presentational only (range-bar context), not a computed value. */
   min: number;
   max: number;
   /** Sub-range considered "normal" for the bar's fill, distinct from the hard min/max. */
   normal: [number, number];
+  /** Register's alert/trip threshold, verbatim. Displayed as reference text, never evaluated here. */
+  threshold: string | null;
+  /** Where this platform's sensor and the FEED register don't line up. */
+  note?: string;
   /** Categorical color-coding (Airthra palette only): process/emission readings vs. tank/inventory levels. */
   accent: "copper" | "moss";
 }
 
 export const SENSOR_MANIFEST: SensorMeta[] = [
-  { sensor_id: "SO2_in", label: "SO2 (inlet)", unit: "ppm", min: 0, max: 5000, normal: [800, 2000], accent: "copper" },
-  { sensor_id: "SO2_out", label: "SO2 (stack/outlet)", unit: "ppm", min: 0, max: 500, normal: [0, 100], accent: "copper" },
-  { sensor_id: "pH", label: "Scrubber pH", unit: "pH", min: 0, max: 14, normal: [6.5, 8.5], accent: "copper" },
-  { sensor_id: "temp_C", label: "Temperature", unit: "C", min: -10, max: 200, normal: [40, 75], accent: "copper" },
-  { sensor_id: "level_KOH_tank", label: "KOH tank level", unit: "%", min: 0, max: 100, normal: [25, 100], accent: "moss" },
-  { sensor_id: "level_K2SO3_tank", label: "K2SO3 tank level", unit: "%", min: 0, max: 100, normal: [0, 85], accent: "moss" },
-  { sensor_id: "flow", label: "Flue gas flow", unit: "m3/h", min: 0, max: 500, normal: [100, 350], accent: "copper" },
+  {
+    sensor_id: "SO2_in",
+    label: "SO2 (inlet)",
+    tag: "AT-01",
+    hardware: "Sangbay K-5S (0–5000 ppm), Modbus RS-485",
+    location: "Gas inlet duct, before B-101 / E-101",
+    purpose: "Raw boiler SO2 mass load entering the plant. Primary billing input.",
+    subsystem: "gas_path",
+    unit: "ppm",
+    min: 0,
+    max: 5000,
+    normal: [200, 800],
+    threshold: ">2000 ppm — high boiler sulfur alarm",
+    accent: "copper",
+  },
+  {
+    sensor_id: "SO2_out",
+    label: "SO2 (stack/outlet)",
+    tag: "AE-02",
+    hardware: "Sangbay K-5S (0–100 ppm), Modbus RS-485",
+    location: "Clean stack exhaust duct, after T-101",
+    purpose: "Continuous stack emission compliance monitoring. Proves >95% removal.",
+    subsystem: "gas_path",
+    unit: "ppm",
+    min: 0,
+    max: 500,
+    normal: [5, 25],
+    threshold: ">50 ppm — TRIP, drops bypass damper",
+    accent: "copper",
+  },
+  {
+    sensor_id: "temp_C",
+    label: "Absorber inlet temp",
+    tag: "TE-01",
+    hardware: "DS18B20 in SS316 thermowell, 1-Wire bus A",
+    location: "Absorber inlet gas pipe, before N1",
+    purpose: "Gas cooling before the FRP tower. Protects vinyl ester resin from thermal degradation.",
+    subsystem: "gas_path",
+    unit: "C",
+    min: -10,
+    max: 200,
+    normal: [55, 65],
+    threshold: "≥70°C — HARD TRIP, drops bypass damper",
+    accent: "copper",
+  },
+  {
+    sensor_id: "flow",
+    label: "Flue gas flow",
+    tag: "FT-01",
+    hardware: "Flow transmitter",
+    location: "Gas inlet duct",
+    purpose: "Flue gas throughput, paired with AT-01 to derive SO2 mass load.",
+    subsystem: "gas_path",
+    unit: "m3/h",
+    min: 0,
+    max: 500,
+    normal: [100, 350],
+    threshold: null,
+    note: "No entry in the FEED instrument register — ranges are the platform's own, pending spec.",
+    accent: "copper",
+  },
+  {
+    sensor_id: "pH",
+    label: "Scrubber pH",
+    tag: "AT-02",
+    hardware: "pH-4502C + electrode, analog → ADS1115",
+    location: "Cooled side-stream from the 200L MS drum",
+    purpose: "Active neutralization & product quality. Guarantees stable K2SO3, prevents stack slippage.",
+    subsystem: "absorber_loop",
+    unit: "pH",
+    min: 0,
+    max: 14,
+    normal: [8.5, 9.5],
+    threshold: "<8.0 — dose more KOH · >10.5 — unreacted KOH",
+    accent: "copper",
+  },
+  {
+    sensor_id: "level_KOH_tank",
+    label: "KOH tank level",
+    tag: "LE-03",
+    hardware: "JSN-SR04T ultrasonic, GPIO trigger/echo",
+    location: "Top lid of the elevated KOH supply tote",
+    purpose: "Raw KOH chemical inventory. Feeds automated bulk procurement.",
+    subsystem: "product_loop",
+    unit: "%",
+    min: 0,
+    max: 100,
+    normal: [25, 100],
+    threshold: "<150 L — order more KOH",
+    note: "Register specifies litres (200–1000 L); this platform stores percent. Not converted — needs a decision.",
+    accent: "moss",
+  },
+  {
+    sensor_id: "level_K2SO3_tank",
+    label: "K2SO3 tank level",
+    tag: "LE-02",
+    hardware: "JSN-SR04T ultrasonic, GPIO trigger/echo",
+    location: "Top lid of the 1000L product IBC tote",
+    purpose: "Fertilizer receiver level. Prevents overfill, triggers driver dispatch.",
+    subsystem: "product_loop",
+    unit: "%",
+    min: 0,
+    max: 100,
+    normal: [0, 85],
+    threshold: ">900 L — alert for tote changeout",
+    note: "Register specifies litres (50–950 L); this platform stores percent. Not converted — needs a decision.",
+    accent: "moss",
+  },
 ];
+
+/** Instrument coverage: how much of the FEED register is actually wired up.
+ * Denominator is the register's full tag count across all five subsystems;
+ * the numerator is SENSOR_MANIFEST. Displayed honestly on the Live page
+ * rather than presenting 7 sensors as if they were the whole plant. */
+export const REGISTER_TAG_COUNT = 40;

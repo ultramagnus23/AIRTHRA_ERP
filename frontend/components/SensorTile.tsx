@@ -28,6 +28,11 @@ export default function SensorTile({
   history,
   range,
   accent = "copper",
+  tag,
+  location,
+  purpose,
+  threshold,
+  note,
 }: {
   label: string;
   unit: string;
@@ -39,6 +44,16 @@ export default function SensorTile({
   range?: { min: number; max: number; normal: [number, number] };
   /** Categorical color-coding (Airthra palette only) - which metric family this tile belongs to. */
   accent?: "copper" | "moss";
+  /** FEED register tag (AT-01, AE-02, ...) - the identifier a field engineer reads. */
+  tag?: string;
+  /** Mounting location + diagnostic purpose, shown on hover as the tile's title. */
+  location?: string;
+  purpose?: string;
+  /** Register's alert/trip threshold, rendered verbatim as reference text.
+   * Never evaluated here - alarm state comes from the alarm engine. */
+  threshold?: string | null;
+  /** Divergence between this platform's sensor and the FEED register. */
+  note?: string;
 }) {
   const info = flag !== null ? qualityInfo(flag) : null;
   const isGood = info?.isGood ?? true;
@@ -63,10 +78,18 @@ export default function SensorTile({
         style={{ background: ACCENT_EDGE[accent] }}
         aria-hidden
       />
-      <div className="flex items-start justify-between">
-        <span className="flex items-center gap-1.5 font-mono text-xs tracking-[0.08em] text-mist uppercase">
-          <span className={`inline-block h-1.5 w-1.5 rounded-full ${ACCENT_DOT[accent]}`} aria-hidden />
-          {label}
+      <div className="flex items-start justify-between gap-2">
+        <span
+          className="flex min-w-0 flex-col gap-0.5"
+          title={[purpose, location && `Mounted: ${location}`].filter(Boolean).join("\n")}
+        >
+          <span className="flex items-center gap-1.5 font-mono text-xs tracking-[0.08em] text-mist uppercase">
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${ACCENT_DOT[accent]}`} aria-hidden />
+            {label}
+          </span>
+          {tag && (
+            <span className="font-mono text-[10px] tracking-[0.12em] text-copper">{tag}</span>
+          )}
         </span>
         {flag !== null && <FlagBadge flag={flag} />}
       </div>
@@ -93,6 +116,15 @@ export default function SensorTile({
             normal {range.normal[0]}–{range.normal[1]} {unit}
           </div>
         </div>
+      )}
+
+      {threshold && (
+        <div className="mt-2 border-l-2 border-rust/40 pl-2 font-mono text-[10px] leading-snug text-mist">
+          {threshold}
+        </div>
+      )}
+      {note && (
+        <div className="mt-1.5 font-mono text-[10px] leading-snug text-sand">{note}</div>
       )}
 
       {history.length > 1 && (

@@ -11,8 +11,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    # Bound to loopback by default: nothing outside this host should reach
+    # Postgres directly (the API and workers use the compose network).
+    # Docker publishes to 0.0.0.0 when no bind address is given, which on
+    # any cloud VM without a host firewall means a public database.
+    # Override PRIVATE_BIND only if you know why you're doing it.
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${PRIVATE_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     networks:
@@ -29,8 +34,12 @@ services:
     container_name: airthra_mosquitto
     restart: unless-stopped
     ports:
+      # 8883/9001 stay publicly bound on purpose - remote edge units
+      # connect to them over TLS with per-device certs. 1883 is the
+      # plaintext dev listener and is loopback-only so it can never
+      # accidentally accept unauthenticated field traffic.
       - "${MQTT_TLS_PORT:-8883}:8883"   # TLS, per-device cert auth (prod)
-      - "${MQTT_DEV_PORT:-1883}:1883"   # DEV ONLY: plaintext listener, disable in prod
+      - "${PRIVATE_BIND:-127.0.0.1}:${MQTT_DEV_PORT:-1883}:1883"   # DEV ONLY plaintext
       - "${MQTT_WS_PORT:-9001}:9001"    # websockets (TLS)
     volumes:
       - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
@@ -66,7 +75,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "${GF_PORT:-3001}:3000"
+      # Loopback-only: reached through Caddy, not directly.
+      - "${PRIVATE_BIND:-127.0.0.1}:${GF_PORT:-3001}:3000"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
@@ -85,8 +95,10 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9090"
     ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9090}:9090"
+      # Loopback-only: object access goes through the API, and the console
+      # is an admin surface that has no business being internet-reachable.
+      - "${PRIVATE_BIND:-127.0.0.1}:${MINIO_PORT:-9000}:9000"
+      - "${PRIVATE_BIND:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9090}:9090"
     volumes:
       - minio_data:/data
     networks:
