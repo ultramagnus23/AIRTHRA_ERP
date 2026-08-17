@@ -7,6 +7,7 @@ import {
   addBomItem, deleteBomItem, getBom, listMaterials, releaseBom, reviseBom, updateBomItem, weightPreview, ErpApiError,
 } from "@/lib/erp/api";
 import type { Bom, BomShape, Material, WeightPreview as WeightPreviewT } from "@/lib/erp/types";
+import ChangeRequestsPanel from "./ChangeRequestsPanel";
 
 const SHAPE_FIELDS: Record<BomShape, { key: string; label: string }[]> = {
   plate: [
@@ -226,9 +227,12 @@ export default function BomEditorPage() {
       {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
       {readOnly && (
         <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">
-          This BOM is released and immutable. Use &quot;Revise&quot; above to create a new draft revision before editing items.
+          This BOM is released and immutable. Use &quot;Revise&quot; above for your own direct revision, or file a
+          formal change request below if the change needs someone else&apos;s sign-off.
         </p>
       )}
+
+      <ChangeRequestsPanel bomId={params.id} bomStatus={bom.status} onRevised={load} />
 
       <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-2">
         <StatTile label="Total weight" value={totalWeight.toFixed(2)} unit="kg" />

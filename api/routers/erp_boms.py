@@ -10,13 +10,25 @@ points back at it, giving the same lineage without violating the CHECK
 constraint. This is a deliberate, documented deviation from the drawings
 pattern, forced by the schema (P0 is already migrated; this phase does not
 alter it).
+
+ENGINEERING CHANGE MANAGEMENT (migration 0010_bom_change_requests)
+POST .../revise below is a direct action: an erp_admin_user creates a new
+revision themselves, no separate approver, no recorded reason beyond
+whatever they put in commit history. That's fine for an admin's own
+change. The change-request endpoints further down are an ADDITIVE formal
+path for changes that need a reviewable trail - request (with a reason)
+-> approval by an erp_admin_user (who did not have to be the requester)
+-> the new revision, atomically. Both paths end up calling the same
+_create_revision() helper, so "was this revision governed by an ECR or
+not" is answered by whether a bom_change_requests row points at it, not
+by two different revision-creation code paths that could drift apart.
 """
 from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -98,6 +110,12 @@ async def _calc_or_400(conn, *, shape: str, dims: dict, qty: float, scrap_pct: f
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
+_ECR_COLS = (
+    "id, bom_id, reason, affected_note, requested_new_revision, status, "
+    "requested_by, requested_at, reviewed_by, reviewed_at, review_note, resulting_bom_id"
+)
+
+
 @router.get("")
 async def list_boms(
     user: CurrentUser = Depends(erp_read_user),
@@ -105,6 +123,38 @@ async def list_boms(
 ):
     rows = (await conn.execute(text(f"SELECT {_BOM_COLS} FROM boms ORDER BY name, revision"))).mappings().all()
     return [dict(r) for r in rows]
+
+
+@router.get("/change-requests")
+async def list_change_requests(
+    ecr_status: str | None = Query(default=None, alias="status"),
+    bom_id: str | None = Query(default=None),
+    user: CurrentUser = Depends(erp_read_user),
+    conn: AsyncConnection = Depends(db_session),
+):
+    """Fleet-wide queue (no bom_id) or scoped to one BOM's history.
+
+    MUST be registered before GET /{bom_id} below - FastAPI/Starlette
+    matches routes in registration order, and "change-requests" would
+    otherwise be captured as a bom_id path parameter by that route
+    (same method, same single path segment) and never reach this one.
+    """
+    clauses, params = [], {}
+    if ecr_status:
+        clauses.append("status = :status")
+        params["status"] = ecr_status
+    if bom_id:
+        clauses.append("bom_id = :bom_id")
+        params["bom_id"] = bom_id
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+    rows = (
+        await conn.execute(
+            text(f"SELECT {_ECR_COLS} FROM bom_change_requests {where} ORDER BY requested_at DESC"),
+            params,
+        )
+    ).mappings().all()
+    return {"change_requests": [dict(r) for r in rows]}
 
 
 @router.get("/{bom_id}")
@@ -328,23 +378,18 @@ async def release_bom(
     return dict(row)
 
 
-@router.post("/{bom_id}/revise", status_code=status.HTTP_201_CREATED)
-async def revise_bom(
+async def _create_revision(
+    conn: AsyncConnection,
+    current: dict,
     bom_id: str,
-    body: ReviseIn,
-    user: CurrentUser = Depends(erp_admin_user),
-    conn: AsyncConnection = Depends(db_session),
-):
-    """Create a new BOM row (new revision), status='draft',
-    supersedes_bom_id pointing back at the released BOM. Optionally copies
-    all bom_items across as a starting point for edits. Only valid from a
-    'released' bom."""
-    current = await _get_bom(conn, bom_id)
-    if current is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="bom not found")
-    if current["status"] != "released":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="can only revise a released bom")
-
+    new_revision: str,
+    name: str | None,
+    drawing_id: str | None,
+    copy_items: bool,
+) -> dict:
+    """Shared by POST .../revise (direct) and the change-request approval
+    path below - one place that actually inserts a new BOM revision, so
+    the two entry points can never drift into different behaviour."""
     new_id = str(uuid.uuid4())
     new_row = (
         await conn.execute(
@@ -358,15 +403,15 @@ async def revise_bom(
             {
                 "id": new_id,
                 "project_id": current["project_id"],
-                "drawing_id": body.drawing_id if body.drawing_id is not None else current["drawing_id"],
-                "name": body.name if body.name is not None else current["name"],
-                "revision": body.new_revision,
+                "drawing_id": drawing_id if drawing_id is not None else current["drawing_id"],
+                "name": name if name is not None else current["name"],
+                "revision": new_revision,
                 "supersedes_bom_id": bom_id,
             },
         )
     ).mappings().first()
 
-    if body.copy_items:
+    if copy_items:
         old_items = (
             await conn.execute(text(f"SELECT {_ITEM_COLS} FROM bom_items WHERE bom_id = :id"), {"id": bom_id})
         ).mappings().all()
@@ -388,3 +433,172 @@ async def revise_bom(
             )
 
     return dict(new_row)
+
+
+@router.post("/{bom_id}/revise", status_code=status.HTTP_201_CREATED)
+async def revise_bom(
+    bom_id: str,
+    body: ReviseIn,
+    user: CurrentUser = Depends(erp_admin_user),
+    conn: AsyncConnection = Depends(db_session),
+):
+    """Direct revision, no change-request ceremony - see this module's
+    ENGINEERING CHANGE MANAGEMENT docstring note for when to use this vs.
+    the formal POST .../change-requests path below."""
+    current = await _get_bom(conn, bom_id)
+    if current is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="bom not found")
+    if current["status"] != "released":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="can only revise a released bom")
+
+    return await _create_revision(
+        conn, current, bom_id, body.new_revision, body.name, body.drawing_id, body.copy_items
+    )
+
+
+# ---------------------------------------------------------------------------
+# Engineering Change Management (migration 0010_bom_change_requests)
+#
+# _ECR_COLS and GET /change-requests are defined earlier in this file
+# (immediately after the router is created), not here - see that
+# definition's docstring for why the route registration order matters.
+# ---------------------------------------------------------------------------
+
+
+class ChangeRequestIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+    affected_note: str | None = Field(default=None, max_length=1000)
+    requested_new_revision: str = Field(min_length=1, max_length=50)
+    copy_items: bool = True
+    drawing_id: str | None = None
+    name: str | None = None
+
+
+class ReviewIn(BaseModel):
+    note: str | None = Field(default=None, max_length=2000)
+
+
+@router.post("/{bom_id}/change-requests", status_code=status.HTTP_201_CREATED)
+async def request_bom_change(
+    bom_id: str,
+    body: ChangeRequestIn,
+    user: CurrentUser = Depends(erp_read_user),
+    conn: AsyncConnection = Depends(db_session),
+):
+    """Any ERP user can REQUEST a change (erp_read_user, not admin-only) -
+    per the spec's own workflow, the request step is not restricted to
+    whoever can also approve it. Only valid against a 'released' bom, same
+    precondition as the direct /revise endpoint."""
+    bom = await _get_bom(conn, bom_id)
+    if bom is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="bom not found")
+    if bom["status"] != "released":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="can only request a change against a released bom - it has nothing to revise yet",
+        )
+
+    row = (
+        await conn.execute(
+            text(
+                f"""
+                INSERT INTO bom_change_requests
+                    (bom_id, reason, affected_note, requested_new_revision, requested_by)
+                VALUES (:bom_id, :reason, :affected_note, :requested_new_revision, :requested_by)
+                RETURNING {_ECR_COLS}
+                """
+            ),
+            {
+                "bom_id": bom_id,
+                "reason": body.reason,
+                "affected_note": body.affected_note,
+                "requested_new_revision": body.requested_new_revision,
+                "requested_by": user.user_id,
+            },
+        )
+    ).mappings().first()
+    return dict(row)
+
+
+async def _get_change_request(conn: AsyncConnection, ecr_id: str) -> dict | None:
+    row = (
+        await conn.execute(text(f"SELECT {_ECR_COLS} FROM bom_change_requests WHERE id = :id"), {"id": ecr_id})
+    ).mappings().first()
+    return dict(row) if row else None
+
+
+@router.post("/change-requests/{ecr_id}/approve")
+async def approve_change_request(
+    ecr_id: str,
+    body: ReviewIn,
+    user: CurrentUser = Depends(erp_admin_user),
+    conn: AsyncConnection = Depends(db_session),
+):
+    """Approving atomically creates the new draft revision - there is no
+    window where a request is 'approved' but the revision doesn't exist
+    yet, which would be a state an API client could observe and act on
+    incorrectly (e.g. start editing a revision that isn't there)."""
+    ecr = await _get_change_request(conn, ecr_id)
+    if ecr is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="change request not found")
+    if ecr["status"] != "pending":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"change request is '{ecr['status']}', not 'pending'")
+
+    bom = await _get_bom(conn, ecr["bom_id"])
+    if bom is None or bom["status"] != "released":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="the bom this request targets is no longer 'released' (already revised by another path)",
+        )
+
+    new_bom = await _create_revision(
+        conn, bom, ecr["bom_id"], ecr["requested_new_revision"],
+        None, None, copy_items=True,
+    )
+
+    row = (
+        await conn.execute(
+            text(
+                f"""
+                UPDATE bom_change_requests
+                SET status = 'approved', reviewed_by = :reviewed_by, reviewed_at = now(),
+                    review_note = :note, resulting_bom_id = :resulting_bom_id
+                WHERE id = :id
+                RETURNING {_ECR_COLS}
+                """
+            ),
+            {"id": ecr_id, "reviewed_by": user.user_id, "note": body.note, "resulting_bom_id": new_bom["id"]},
+        )
+    ).mappings().first()
+    return {"change_request": dict(row), "new_bom": new_bom}
+
+
+@router.post("/change-requests/{ecr_id}/reject")
+async def reject_change_request(
+    ecr_id: str,
+    body: ReviewIn,
+    user: CurrentUser = Depends(erp_admin_user),
+    conn: AsyncConnection = Depends(db_session),
+):
+    ecr = await _get_change_request(conn, ecr_id)
+    if ecr is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="change request not found")
+    if ecr["status"] != "pending":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"change request is '{ecr['status']}', not 'pending'")
+    if not body.note:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="a rejection requires a note explaining why")
+
+    row = (
+        await conn.execute(
+            text(
+                f"""
+                UPDATE bom_change_requests
+                SET status = 'rejected', reviewed_by = :reviewed_by, reviewed_at = now(), review_note = :note
+                WHERE id = :id
+                RETURNING {_ECR_COLS}
+                """
+            ),
+            {"id": ecr_id, "reviewed_by": user.user_id, "note": body.note},
+        )
+    ).mappings().first()
+    return dict(row)
