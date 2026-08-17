@@ -92,6 +92,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import sys
 import tempfile
@@ -133,10 +134,11 @@ TRAILING_LOOKBACK_DAYS = 7
 DEFAULT_GAP_MODE = os.environ.get("BILLING_GAP_MODE", "exclude")
 assert DEFAULT_GAP_MODE in ("exclude", "trailing_avg")
 
-# Business rate: INR per kg SO2 captured. Not specified anywhere in the P0
-# schema/PRD excerpt available to this phase - configurable placeholder,
-# documented rather than silently hardcoded with no visibility.
-SO2_RATE_PER_KG = float(os.environ.get("SO2_RATE_PER_KG", "45.0"))
+# SO2_RATE_PER_KG / a single global rate is GONE. Every plant now bills
+# against its own `contracts` row (migration 0008_contracts) - base fee +
+# usage rate + an uptime-gated performance bonus/penalty, configured per
+# plant rather than one number shared across the whole fleet. See
+# _active_contract() and _compute_line_items() below.
 
 SENSOR_SO2_IN = "SO2_in"
 SENSOR_SO2_OUT = "SO2_out"
@@ -256,15 +258,17 @@ def compute_billing_numbers(engine: Engine, plant_id: str, period: str, gap_mode
     uptime_pct = round(100.0 * good_hours / total_hours, 2) if total_hours else 0.0
     so2_kg = round(so2_kg_total, 3)
     k2so3_kg = round(so2_kg * K2SO3_PER_SO2_MASS_RATIO, 3)
-    amount = round(so2_kg * SO2_RATE_PER_KG, 2)
 
+    # NOTE: no `amount` here anymore. Raw operational numbers (how much
+    # was captured, how available was the data) are contract-independent
+    # facts about the period; converting them to money is a separate step
+    # (_compute_line_items) that needs to know WHICH contract applies.
     return {
         "plant_id": plant_id,
         "period": period,
         "so2_kg": so2_kg,
         "k2so3_kg": k2so3_kg,
         "uptime_pct": uptime_pct,
-        "amount": amount,
         "total_hours": total_hours,
         "good_hours": good_hours,
         "hours_billed": hours_billed,
@@ -273,10 +277,81 @@ def compute_billing_numbers(engine: Engine, plant_id: str, period: str, gap_mode
 
 
 # ---------------------------------------------------------------------------
+# Contract-driven pricing
+#
+# Rule #8 of the platform's own commercial spec: don't hardcode Airthra's
+# billing formula into the software. This used to be one env var
+# (SO2_RATE_PER_KG) shared by every plant on the fleet; now every plant
+# bills against its own `contracts` row.
+# ---------------------------------------------------------------------------
+
+def _active_contract(engine: Engine, plant_id: str, period: str) -> dict | None:
+    """The contract in force on the FIRST day of the billed period - not
+    necessarily today's status='active' row, since billing a past month
+    must use whichever contract covered that month even if it has since
+    been superseded. Returns None if no contract covers the period at
+    all, which the caller must treat as "cannot bill this plant/period",
+    never as "bill at some default rate"."""
+    period_start, _ = month_bounds(period)
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT contract_id, base_fee_inr, usage_rate_inr_per_kg,
+                       performance_bonus_threshold_pct, performance_bonus_inr,
+                       performance_penalty_threshold_pct, performance_penalty_inr,
+                       revenue_share_pct, status
+                FROM contracts
+                WHERE plant_id = :plant_id
+                  AND effective_from <= :period_start
+                  AND (effective_to IS NULL OR effective_to >= :period_start)
+                ORDER BY effective_from DESC
+                LIMIT 1
+                """
+            ),
+            {"plant_id": plant_id, "period_start": period_start.date()},
+        ).mappings().first()
+    return dict(row) if row else None
+
+
+def _compute_line_items(numbers: dict, contract: dict) -> dict:
+    """Pure function: (operational numbers, contract terms) -> money.
+    No I/O, so it's trivial to unit-test and impossible to accidentally
+    apply the wrong contract - the caller already resolved which one."""
+    base_fee = float(contract["base_fee_inr"])
+    usage_fee = round(numbers["so2_kg"] * float(contract["usage_rate_inr_per_kg"]), 2)
+
+    performance_adjustment = 0.0
+    performance_note = None
+    bonus_threshold = contract["performance_bonus_threshold_pct"]
+    penalty_threshold = contract["performance_penalty_threshold_pct"]
+    uptime = numbers["uptime_pct"]
+
+    if bonus_threshold is not None and uptime >= float(bonus_threshold):
+        performance_adjustment = float(contract["performance_bonus_inr"])
+        performance_note = f"uptime {uptime}% >= {bonus_threshold}% bonus threshold"
+    elif penalty_threshold is not None and uptime < float(penalty_threshold):
+        performance_adjustment = -float(contract["performance_penalty_inr"])
+        performance_note = f"uptime {uptime}% < {penalty_threshold}% penalty threshold"
+
+    total = round(base_fee + usage_fee + performance_adjustment, 2)
+
+    return {
+        "contract_id": str(contract["contract_id"]),
+        "base_fee_inr": round(base_fee, 2),
+        "usage_rate_inr_per_kg": float(contract["usage_rate_inr_per_kg"]),
+        "usage_fee_inr": usage_fee,
+        "performance_adjustment_inr": round(performance_adjustment, 2),
+        "performance_note": performance_note,
+        "total_inr": total,
+    }
+
+
+# ---------------------------------------------------------------------------
 # PDF rendering
 # ---------------------------------------------------------------------------
 
-def render_invoice_pdf(numbers: dict, plant_name: str, out_path: Path) -> None:
+def render_invoice_pdf(numbers: dict, line_items: dict, plant_name: str, out_path: Path) -> None:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.pdfgen import canvas
@@ -302,11 +377,24 @@ def render_invoice_pdf(numbers: dict, plant_name: str, out_path: Path) -> None:
     line(f"K2SO3 produced:     {numbers['k2so3_kg']:.3f} kg")
     line(f"Uptime:              {numbers['uptime_pct']:.2f} %", dy=10 * mm)
 
-    line(f"Billed hours: {numbers['hours_billed']} / {numbers['total_hours']}", size=10, dy=8 * mm)
-    line(f"Rate: INR {SO2_RATE_PER_KG:.2f} / kg SO2 captured", size=10)
+    line(f"Billed hours: {numbers['hours_billed']} / {numbers['total_hours']}", size=10, dy=10 * mm)
+
+    line("Charges", size=13, bold=True, dy=9 * mm)
+    line(f"Base fee:                    INR {line_items['base_fee_inr']:,.2f}")
+    line(
+        f"Usage ({line_items['usage_rate_inr_per_kg']:.2f}/kg x {numbers['so2_kg']:.3f} kg): "
+        f"INR {line_items['usage_fee_inr']:,.2f}"
+    )
+    if line_items["performance_adjustment_inr"] != 0:
+        sign = "+" if line_items["performance_adjustment_inr"] >= 0 else "-"
+        line(
+            f"Performance adjustment ({line_items['performance_note']}): "
+            f"{sign} INR {abs(line_items['performance_adjustment_inr']):,.2f}"
+        )
+    line("", dy=2 * mm)
 
     line("Amount due", size=13, bold=True, dy=9 * mm)
-    line(f"INR {numbers['amount']:,.2f}", size=14, bold=True)
+    line(f"INR {line_items['total_inr']:,.2f}", size=14, bold=True)
 
     c.showPage()
     c.save()
@@ -328,11 +416,25 @@ def generate_invoice(engine: Engine, client, plant_id: str, period: str, gap_mod
         raise ValueError(f"unknown plant_id '{plant_id}'")
     plant_name = plant_row["name"]
 
+    # No contract covering this period -> cannot honestly produce a
+    # figure. Returning a sentinel (never $0, which reads as "billed
+    # nothing" rather than "not billed at all") so the CLI loop can skip
+    # this plant/period and say so plainly instead of guessing a rate.
+    contract = _active_contract(engine, plant_id, period)
+    if contract is None:
+        return {
+            "plant_id": plant_id,
+            "period": period,
+            "skipped": True,
+            "reason": f"no contract covers {plant_id} for period {period} - not billed",
+        }
+
     numbers = compute_billing_numbers(engine, plant_id, period, gap_mode)
+    line_items = _compute_line_items(numbers, contract)
 
     with tempfile.TemporaryDirectory(prefix="airthra_invoice_") as tmpdir:
         local_pdf = Path(tmpdir) / f"{plant_id}_{period}.pdf"
-        render_invoice_pdf(numbers, plant_name, local_pdf)
+        render_invoice_pdf(numbers, line_items, plant_name, local_pdf)
 
         digest_hex = sha256_file(local_pdf)
         final_key = f"invoices/{plant_id}/{period}.pdf"
@@ -346,7 +448,9 @@ def generate_invoice(engine: Engine, client, plant_id: str, period: str, gap_mod
 
         pdf_url = public_url(final_key)
 
-    row = _upsert_invoice(engine, plant_id, period, numbers, pdf_url)
+    row = _upsert_invoice(engine, plant_id, period, numbers, line_items, pdf_url)
+    numbers["line_items"] = line_items
+    numbers["amount"] = line_items["total_inr"]
     numbers["pdf_url"] = pdf_url
     numbers["sha256"] = digest_hex
     numbers["invoice_id"] = str(row["invoice_id"])
@@ -355,19 +459,23 @@ def generate_invoice(engine: Engine, client, plant_id: str, period: str, gap_mod
     return numbers
 
 
-def _upsert_invoice(engine: Engine, plant_id: str, period: str, numbers: dict, pdf_url: str) -> dict:
+def _upsert_invoice(engine: Engine, plant_id: str, period: str, numbers: dict, line_items: dict, pdf_url: str) -> dict:
     with engine.begin() as conn:
         row = conn.execute(
             text(
                 """
-                INSERT INTO invoices (invoice_id, plant_id, period, so2_kg, k2so3_kg, uptime_pct, amount, pdf_url, status)
-                VALUES (gen_random_uuid(), :plant_id, :period, :so2_kg, :k2so3_kg, :uptime_pct, :amount, :pdf_url, 'draft')
+                INSERT INTO invoices (invoice_id, plant_id, period, so2_kg, k2so3_kg, uptime_pct,
+                                       amount, pdf_url, status, contract_id, line_items)
+                VALUES (gen_random_uuid(), :plant_id, :period, :so2_kg, :k2so3_kg, :uptime_pct,
+                        :amount, :pdf_url, 'draft', :contract_id, CAST(:line_items AS jsonb))
                 ON CONFLICT (plant_id, period) DO UPDATE SET
                     so2_kg = EXCLUDED.so2_kg,
                     k2so3_kg = EXCLUDED.k2so3_kg,
                     uptime_pct = EXCLUDED.uptime_pct,
                     amount = EXCLUDED.amount,
-                    pdf_url = EXCLUDED.pdf_url
+                    pdf_url = EXCLUDED.pdf_url,
+                    contract_id = EXCLUDED.contract_id,
+                    line_items = EXCLUDED.line_items
                 WHERE invoices.status = 'draft'
                 RETURNING invoice_id, plant_id, period, status, pdf_url
                 """
@@ -375,10 +483,12 @@ def _upsert_invoice(engine: Engine, plant_id: str, period: str, numbers: dict, p
             {
                 "plant_id": plant_id,
                 "period": period,
+                "contract_id": line_items["contract_id"],
+                "line_items": json.dumps(line_items),
+                "amount": line_items["total_inr"],
                 "so2_kg": numbers["so2_kg"],
                 "k2so3_kg": numbers["k2so3_kg"],
                 "uptime_pct": numbers["uptime_pct"],
-                "amount": numbers["amount"],
                 "pdf_url": pdf_url,
             },
         ).mappings().first()
@@ -424,9 +534,17 @@ def main() -> int:
     print(f"[billing_worker] billing period={period} for {len(plant_ids)} plant(s), gap_mode={args.gap_mode or DEFAULT_GAP_MODE}")
 
     failures = []
+    skipped = []
     for plant_id in plant_ids:
         try:
             result = generate_invoice(engine, client, plant_id, period, gap_mode=args.gap_mode)
+            if result.get("skipped"):
+                # No contract covers this plant/period - NOT a failure, and
+                # explicitly not billed at any guessed rate. Distinct from
+                # an error so a missing contract doesn't look like a bug.
+                print(f"[billing_worker] {plant_id} {period}: SKIPPED - {result['reason']}")
+                skipped.append(plant_id)
+                continue
             print(
                 f"[billing_worker] {plant_id} {period}: so2_kg={result['so2_kg']} "
                 f"k2so3_kg={result['k2so3_kg']} uptime_pct={result['uptime_pct']} "
@@ -437,7 +555,8 @@ def main() -> int:
             failures.append((plant_id, str(exc)))
 
     print()
-    print(f"[billing_worker] done: {len(plant_ids) - len(failures)} succeeded, {len(failures)} failed")
+    billed = len(plant_ids) - len(failures) - len(skipped)
+    print(f"[billing_worker] done: {billed} billed, {len(skipped)} skipped (no contract), {len(failures)} failed")
     if failures:
         for plant_id, err in failures:
             print(f"  - {plant_id}: {err}", file=sys.stderr)

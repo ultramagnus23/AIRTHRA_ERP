@@ -136,6 +136,7 @@ Options, in order of preference:
 | Clock trust gate | 6 cases incl. epoch boot, backwards jump, watermark persistence |
 | ML ground truth | 10 one-tap events + `calibration`/`purge` flags |
 | **0.2 Tenant onboarding** | Full loop proven live through the actual browser UI, not just curl: admin creates a plant + sensor manifest → creates a user scoped to it → gets a one-time invite link inline → fresh unauthenticated tab accepts it, sets a password → redirects to `/login` → signs in → lands correctly scoped on that exact plant's dashboard. Cross-tenant access to `goa_pilot_01` correctly 403'd. `seed/seed.py` is no longer the only way to add a customer. |
+| **Contract-driven billing** (enterprise spec Phase 3 / rule #8) | The hardcoded global `SO2_RATE_PER_KG` env var is gone. Every plant bills against its own `contracts` row (base fee + usage rate + uptime-gated bonus/penalty); a plant with no contract is honestly skipped, never billed at a guessed rate — proven live (`nagpur_pilot_03` skipped, `goa_pilot_01`/`pune_pilot_02` billed correctly, including a real negative-total SLA-penalty case). Admin UI on the Billing page: contract table + create/renew form, invoice line-item breakdown. Caught and fixed a real regression while building this: the invoice PDF links were pointing at the MinIO bucket made private earlier this session, with no consumer wired up yet — this was the first consumer, so `admin/invoices` now returns short-lived presigned URLs. |
 
 **Still open, and why:**
 

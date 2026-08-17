@@ -207,6 +207,16 @@ export interface RiskScoresResponse {
 
 export type InvoiceStatus = "draft" | "approved" | "sent";
 
+export interface InvoiceLineItems {
+  contract_id: string;
+  base_fee_inr: number;
+  usage_rate_inr_per_kg: number;
+  usage_fee_inr: number;
+  performance_adjustment_inr: number;
+  performance_note: string | null;
+  total_inr: number;
+}
+
 export interface Invoice {
   invoice_id: string;
   plant_id: string;
@@ -217,6 +227,42 @@ export interface Invoice {
   amount: number | null;
   pdf_url: string | null;
   status: InvoiceStatus;
+  contract_id: string | null;
+  line_items: InvoiceLineItems | Record<string, never>;
+}
+
+export interface Contract {
+  contract_id: string;
+  plant_id: string;
+  status: "draft" | "active" | "ended";
+  effective_from: string;
+  effective_to: string | null;
+  base_fee_inr: number;
+  usage_rate_inr_per_kg: number;
+  performance_bonus_threshold_pct: number | null;
+  performance_bonus_inr: number;
+  performance_penalty_threshold_pct: number | null;
+  performance_penalty_inr: number;
+  revenue_share_pct: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface ContractsResponse {
+  contracts: Contract[];
+}
+
+export interface CreateContractInput {
+  plant_id: string;
+  effective_from: string;
+  base_fee_inr: number;
+  usage_rate_inr_per_kg: number;
+  performance_bonus_threshold_pct?: number | null;
+  performance_bonus_inr?: number;
+  performance_penalty_threshold_pct?: number | null;
+  performance_penalty_inr?: number;
+  revenue_share_pct?: number;
+  notes?: string | null;
 }
 
 export interface InvoicesResponse {

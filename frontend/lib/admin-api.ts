@@ -18,6 +18,9 @@ import type {
   AdminUsersResponse,
   AuditLogResponse,
   BurnRatesResponse,
+  Contract,
+  ContractsResponse,
+  CreateContractInput,
   CreatePlantInput,
   CreateUserInput,
   CreateUserResult,
@@ -142,4 +145,18 @@ export function reinviteUser(userId: string) {
 
 export function getAuditLog(limit: number = 100) {
   return request<AuditLogResponse>(`/admin/audit-log?limit=${limit}`);
+}
+
+// --- Contracts (api/routers/admin_billing.py) ---
+
+export function listContracts(plantId?: string) {
+  const suffix = plantId ? `?plant_id=${encodeURIComponent(plantId)}` : "";
+  return request<ContractsResponse>(`/admin/contracts${suffix}`);
+}
+
+export function createContract(body: CreateContractInput) {
+  return request<Contract>("/admin/contracts", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
