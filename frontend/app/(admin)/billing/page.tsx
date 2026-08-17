@@ -10,6 +10,7 @@ import {
   AdminApiError,
 } from "@/lib/admin-api";
 import type { AdminPlantSummary, Contract, CreateContractInput, Invoice, InvoiceStatus } from "@/lib/admin-types";
+import DocumentsPanel from "@/components/admin/DocumentsPanel";
 
 // draft = pending/warning (copper), approved = success (moss),
 // sent = neutral final state (mist/line) - matches DESIGN.md's semantic
@@ -229,6 +230,7 @@ function ContractsSection() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [docsOpen, setDocsOpen] = useState<string | null>(null);
   const [form, setForm] = useState<CreateContractInput>({
     plant_id: "",
     effective_from: new Date().toISOString().slice(0, 10),
@@ -293,36 +295,56 @@ function ContractsSection() {
               <th className="px-2 py-2">Usage rate</th>
               <th className="px-2 py-2">Bonus</th>
               <th className="px-2 py-2">Penalty</th>
+              <th className="px-2 py-2" />
             </tr>
           </thead>
           <tbody>
             {plants.map((p) => {
               const c = active.find((c) => c.plant_id === p.plant_id);
+              const isOpen = docsOpen === c?.contract_id;
               return (
-                <tr key={p.plant_id} className="border-b border-hair last:border-0">
-                  <td className="px-2 py-2 font-mono text-xs text-fg">{p.plant_id}</td>
-                  {c ? (
-                    <>
-                      <td className="px-2 py-2 font-mono text-xs text-mist">{c.effective_from}</td>
-                      <td className="px-2 py-2 font-mono text-fg">{fmtInr(c.base_fee_inr)}</td>
-                      <td className="px-2 py-2 font-mono text-fg">INR {c.usage_rate_inr_per_kg}/kg</td>
-                      <td className="px-2 py-2 font-mono text-xs text-moss">
-                        {c.performance_bonus_threshold_pct !== null
-                          ? `+${fmtInr(c.performance_bonus_inr)} @ >=${c.performance_bonus_threshold_pct}%`
-                          : "-"}
+                <Fragment key={p.plant_id}>
+                  <tr className="border-b border-hair last:border-0">
+                    <td className="px-2 py-2 font-mono text-xs text-fg">{p.plant_id}</td>
+                    {c ? (
+                      <>
+                        <td className="px-2 py-2 font-mono text-xs text-mist">{c.effective_from}</td>
+                        <td className="px-2 py-2 font-mono text-fg">{fmtInr(c.base_fee_inr)}</td>
+                        <td className="px-2 py-2 font-mono text-fg">INR {c.usage_rate_inr_per_kg}/kg</td>
+                        <td className="px-2 py-2 font-mono text-xs text-moss">
+                          {c.performance_bonus_threshold_pct !== null
+                            ? `+${fmtInr(c.performance_bonus_inr)} @ >=${c.performance_bonus_threshold_pct}%`
+                            : "-"}
+                        </td>
+                        <td className="px-2 py-2 font-mono text-xs text-rust">
+                          {c.performance_penalty_threshold_pct !== null
+                            ? `-${fmtInr(c.performance_penalty_inr)} @ <${c.performance_penalty_threshold_pct}%`
+                            : "-"}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setDocsOpen(isOpen ? null : c.contract_id)}
+                            className="text-xs text-copper hover:text-fg"
+                          >
+                            {isOpen ? "hide docs" : "docs"}
+                          </button>
+                        </td>
+                      </>
+                    ) : (
+                      <td colSpan={6} className="px-2 py-2 text-mist">
+                        No active contract — not billed
                       </td>
-                      <td className="px-2 py-2 font-mono text-xs text-rust">
-                        {c.performance_penalty_threshold_pct !== null
-                          ? `-${fmtInr(c.performance_penalty_inr)} @ <${c.performance_penalty_threshold_pct}%`
-                          : "-"}
+                    )}
+                  </tr>
+                  {isOpen && c && (
+                    <tr className="border-b border-hair last:border-0">
+                      <td colSpan={7} className="px-2 py-3">
+                        <DocumentsPanel entityType="contract" entityId={c.contract_id} title="Contract documents" />
                       </td>
-                    </>
-                  ) : (
-                    <td colSpan={5} className="px-2 py-2 text-mist">
-                      No active contract — not billed
-                    </td>
+                    </tr>
                   )}
-                </tr>
+                </Fragment>
               );
             })}
           </tbody>

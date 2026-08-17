@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   listAdminPlants,
   createPlant,
@@ -17,6 +17,7 @@ import type {
   DbRole,
   SensorInput,
 } from "@/lib/admin-types";
+import DocumentsPanel from "@/components/admin/DocumentsPanel";
 
 // Tenant onboarding: the real replacement for "run seed/seed.py by hand
 // against production" (see SHIPPING.md 0.2). Every mutation here writes
@@ -111,6 +112,7 @@ function NewPlantSection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [docsOpen, setDocsOpen] = useState<string | null>(null);
 
   function updateSensor(i: number, patch: Partial<SensorInput>) {
     setSensors((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
@@ -175,25 +177,44 @@ function NewPlantSection({
               <th className="px-2 py-2">Sensors</th>
               <th className="px-2 py-2">Users</th>
               <th className="px-2 py-2">Commissioned</th>
+              <th className="px-2 py-2" />
             </tr>
           </thead>
           <tbody>
             {plants.map((p) => (
-              <tr key={p.plant_id} className="border-b border-hair last:border-0">
-                <td className="px-2 py-2">
-                  <div className="font-medium text-fg">{p.name}</div>
-                  <div className="font-mono text-xs text-mist">{p.plant_id}</div>
-                </td>
-                <td className="px-2 py-2 font-mono text-fg">{p.sensor_count}</td>
-                <td className="px-2 py-2 font-mono text-fg">{p.user_count}</td>
-                <td className="px-2 py-2 font-mono text-xs text-mist">
-                  {p.commissioning_date ?? "—"}
-                </td>
-              </tr>
+              <Fragment key={p.plant_id}>
+                <tr className="border-b border-hair last:border-0">
+                  <td className="px-2 py-2">
+                    <div className="font-medium text-fg">{p.name}</div>
+                    <div className="font-mono text-xs text-mist">{p.plant_id}</div>
+                  </td>
+                  <td className="px-2 py-2 font-mono text-fg">{p.sensor_count}</td>
+                  <td className="px-2 py-2 font-mono text-fg">{p.user_count}</td>
+                  <td className="px-2 py-2 font-mono text-xs text-mist">
+                    {p.commissioning_date ?? "—"}
+                  </td>
+                  <td className="px-2 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setDocsOpen((cur) => (cur === p.plant_id ? null : p.plant_id))}
+                      className="text-xs text-copper hover:text-fg"
+                    >
+                      {docsOpen === p.plant_id ? "hide docs" : "docs"}
+                    </button>
+                  </td>
+                </tr>
+                {docsOpen === p.plant_id && (
+                  <tr className="border-b border-hair last:border-0">
+                    <td colSpan={5} className="px-2 py-3">
+                      <DocumentsPanel entityType="plant" entityId={p.plant_id} title={`${p.plant_id} documents`} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
             {plants.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-2 py-6 text-center text-mist">
+                <td colSpan={5} className="px-2 py-6 text-center text-mist">
                   No plants yet.
                 </td>
               </tr>

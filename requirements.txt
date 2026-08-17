@@ -35,3 +35,10 @@ opentimestamps-client==0.7.2
 # --- P5: ERP procurement + engineering (PO PDFs, MinIO object storage via
 # boto3, already listed above under P4) ---
 reportlab==5.0.0
+
+# --- Document management (api/routers/admin_documents.py) ---
+# Every prior file upload in this codebase is the server generating a PDF
+# and pushing it to storage - never a browser sending multipart/form-data.
+# FastAPI's UploadFile/Form parsing needs this to parse that, and does
+# not vendor it itself.
+python-multipart==0.0.20

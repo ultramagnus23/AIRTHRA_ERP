@@ -24,6 +24,9 @@ import type {
   CreatePlantInput,
   CreateUserInput,
   CreateUserResult,
+  DocumentEntityType,
+  DocumentRecord,
+  DocumentsResponse,
   FleetResponse,
   InvoicesResponse,
   Invoice,
@@ -159,4 +162,50 @@ export function createContract(body: CreateContractInput) {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+// --- Documents (api/routers/admin_documents.py) ---
+// uploadDocument bypasses request()'s JSON helper deliberately: it must
+// send multipart/form-data with the browser's own boundary, which means
+// NOT setting a Content-Type header at all (fetch/FormData set the
+// correct one, including the boundary, only when the caller doesn't).
+// The proxy (app/api/backend/[...path]/route.ts) forwards whatever
+// Content-Type the incoming request carries, so this works unmodified.
+
+export function listDocuments(entityType: DocumentEntityType, entityId: string) {
+  return request<DocumentsResponse>(
+    `/admin/documents?entity_type=${entityType}&entity_id=${encodeURIComponent(entityId)}`,
+  );
+}
+
+export async function uploadDocument(
+  entityType: DocumentEntityType,
+  entityId: string,
+  file: File,
+  notes?: string,
+): Promise<DocumentRecord> {
+  const form = new FormData();
+  form.set("entity_type", entityType);
+  form.set("entity_id", entityId);
+  if (notes) form.set("notes", notes);
+  form.set("file", file);
+
+  const res = await fetch("/api/backend/admin/documents", { method: "POST", body: form, cache: "no-store" });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      detail = (await res.json()).detail ?? detail;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new AdminApiError(res.status, detail);
+  }
+  return (await res.json()) as DocumentRecord;
+}
+
+export async function deleteDocument(documentId: string): Promise<void> {
+  const res = await fetch(`/api/backend/admin/documents/${documentId}`, { method: "DELETE", cache: "no-store" });
+  if (!res.ok && res.status !== 204) {
+    throw new AdminApiError(res.status, res.statusText);
+  }
 }

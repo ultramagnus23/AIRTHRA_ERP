@@ -92,6 +92,38 @@ export interface AuditLogResponse {
   entries: AuditLogEntry[];
 }
 
+// Mirrors migration 0009_documents's CHECK constraint - keep in sync.
+export type DocumentEntityType =
+  | "plant"
+  | "contract"
+  | "vendor"
+  | "purchase_order"
+  | "bom"
+  | "invoice"
+  | "fabrication_job"
+  | "unit_serial"
+  | "user"
+  | "company";
+
+export interface DocumentRecord {
+  document_id: string;
+  entity_type: DocumentEntityType;
+  entity_id: string;
+  filename: string;
+  content_type: string;
+  sha256: string;
+  bytes: number;
+  notes: string | null;
+  uploaded_by: string | null;
+  uploaded_by_email: string | null;
+  uploaded_at: string;
+  download_url: string;
+}
+
+export interface DocumentsResponse {
+  documents: DocumentRecord[];
+}
+
 export type FleetColor = "green" | "yellow" | "red" | "gray";
 
 export interface FleetEntry {

@@ -115,3 +115,16 @@ def key_from_url(url: str) -> str | None:
     presigning something outside it."""
     prefix = f"{MINIO_ENDPOINT}/{MINIO_BUCKET}/"
     return url[len(prefix):] if url.startswith(prefix) else None
+
+
+def delete_key(key: str) -> None:
+    """Best-effort object deletion, used by DELETE /admin/documents/{id}
+    (api/routers/admin_documents.py). Deliberately does not raise: the DB
+    row is the source of truth for "does this document exist" and is
+    already gone by the time this is called, so a storage-side failure
+    here means an orphaned object, not a user-visible inconsistency - see
+    that endpoint's docstring for why the DB delete happens first."""
+    try:
+        _client().delete_object(Bucket=MINIO_BUCKET, Key=key)
+    except Exception:  # noqa: BLE001 - best-effort cleanup only
+        pass
