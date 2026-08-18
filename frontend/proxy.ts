@@ -1,52 +1,58 @@
-// Route gate (Next.js 16 renamed "middleware" -> "proxy" - see
-// node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md).
-// Runs before any page render: redirects unauthenticated visitors to
-// /login, and bounces an authenticated non-tenant user away from
-// client-dashboard URLs. This is UX-only (unverified JWT decode, see
-// lib/session.ts) - the real boundary is FastAPI's require_plant_access
-// on every request the /api/backend proxy forwards. The per-plant_id
-// check (does THIS user's JWT cover THIS plant_id) happens one layer
-// deeper, in app/(client)/[plant_id]/layout.tsx, since proxy doesn't
-// get an easy typed match on the dynamic segment here.
-import { NextRequest, NextResponse } from "next/server";
+// Department-scoped route gate for dept_user sessions. Runs before every
+// (erp)/(admin) page renders and redirects a dept_user away from a page
+// outside their one business function - see lib/departments.ts for the
+// department -> page-list mapping this enforces, which mirrors the
+// backend's api/routers/erp_*.py and api/routers/admin_*.py
+// require_department(...)/require_global_or_department(...) calls.
+//
+// Same UX-only caveat as lib/session.ts: the JWT is decoded, not
+// verified, here (Proxy has no access to JWT_SECRET, which is the
+// FastAPI api's secret). The real enforcement is every gated endpoint's
+// 403 server-side; this only stops a dept_user from ever seeing a page
+// their JWT can't act on render in the first place.
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { AUTH_COOKIE, decodeSessionToken } from "@/lib/session";
+import { departmentAllowsPath } from "@/lib/departments";
 
-// Unlike the old "middleware" convention (which defaulted to the Edge
-// runtime and needed an explicit `export const runtime = "nodejs"` for
-// decodeSessionToken's Buffer usage to work), "proxy" always runs on
-// Node.js - a `runtime` export here is a build error.
+export function proxy(request: NextRequest) {
+  const session = decodeSessionToken(request.cookies.get(AUTH_COOKIE)?.value);
 
-const PUBLIC_PATHS = ["/login"];
-
-export function proxy(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-
-  if (
-    PUBLIC_PATHS.includes(pathname) ||
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/_next/") ||
-    pathname === "/favicon.ico" ||
-    // /driver/[trip_token] is a genuinely unauthenticated route - the
-    // driver has no JWT, the per-trip token IS the auth (verified
-    // server-side by FastAPI on every request, see
-    // api/routers/logistics.py's _verify_trip_token). Do not route it
-    // through the JWT-cookie gate below.
-    pathname.startsWith("/driver/")
-  ) {
-    return NextResponse.next();
-  }
-
-  const session = decodeSessionToken(req.cookies.get(AUTH_COOKIE)?.value);
-  if (!session) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+  if (session?.role === "dept_user" && session.department) {
+    const { pathname } = request.nextUrl;
+    if (!departmentAllowsPath(session.department, pathname)) {
+      return NextResponse.redirect(new URL("/403", request.url));
+    }
   }
 
   return NextResponse.next();
 }
 
+// Next.js statically analyzes this array at build time (its own docs:
+// "matcher values need to be constants... dynamic values are ignored"),
+// so this is a literal, not computed from lib/departments.ts's page
+// lists at runtime - it MUST be kept in sync with every page listed in
+// DEPARTMENT_ERP_PAGES/DEPARTMENT_ADMIN_PAGES there by hand.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image).*)"],
+  matcher: [
+    "/boms", "/boms/:path*",
+    "/drawings", "/drawings/:path*",
+    "/projects", "/projects/:path*",
+    "/jobs", "/jobs/:path*",
+    "/qc", "/qc/:path*",
+    "/vendors", "/vendors/:path*",
+    "/materials", "/materials/:path*",
+    "/hardware", "/hardware/:path*",
+    "/pos", "/pos/:path*",
+    "/grn", "/grn/:path*",
+    "/inventory", "/inventory/:path*",
+    "/invoices", "/invoices/:path*",
+    "/quotations", "/quotations/:path*",
+    "/dispatch", "/dispatch/:path*",
+    "/billing", "/billing/:path*",
+    "/leads", "/leads/:path*",
+    "/offtake", "/offtake/:path*",
+    "/logistics", "/logistics/:path*",
+    "/mrv", "/mrv/:path*",
+  ],
 };

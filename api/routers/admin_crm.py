@@ -15,7 +15,15 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from ..deps import CurrentUser, db_session, get_current_user
-from .admin_common import require_global, require_global_admin
+from .admin_common import require_global_admin_or_department, require_global_or_department
+
+
+def require_global(user: CurrentUser) -> None:
+    require_global_or_department(user, "sales")
+
+
+def require_global_admin(user: CurrentUser) -> None:
+    require_global_admin_or_department(user, "sales")
 
 router = APIRouter(prefix="/admin/leads", tags=["admin-crm"])
 

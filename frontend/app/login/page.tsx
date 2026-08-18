@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { login, ApiError } from "@/lib/api";
+import { DEPARTMENT_HOME } from "@/lib/departments";
 
 function LoginForm() {
   const router = useRouter();
@@ -23,6 +24,8 @@ function LoginForm() {
         router.push(next);
       } else if (res.role === "tenant_read" && res.plant_ids.length > 0) {
         router.push(`/${res.plant_ids[0]}`);
+      } else if (res.role === "dept_user" && res.department) {
+        router.push(DEPARTMENT_HOME[res.department]);
       } else {
         router.push("/");
       }

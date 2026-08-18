@@ -14,7 +14,10 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from ..erp_deps import CurrentUser, db_session, erp_admin_user, erp_read_user
+from ..dept_deps import CurrentUser, db_session, require_department, require_department_admin
+
+erp_read_user = require_department("procurement")
+erp_admin_user = require_department_admin("procurement")
 
 router = APIRouter(prefix="/erp/grn", tags=["erp-grn"])
 

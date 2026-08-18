@@ -33,3 +33,41 @@ def require_global_admin(user: CurrentUser) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="this endpoint requires the global_admin role (global_read is read-only)",
         )
+
+
+def require_global_or_department(user: CurrentUser, *departments: str) -> None:
+    """Read-tier gate for admin endpoints that belong to one business
+    function (billing -> finance, leads/offtake -> sales, logistics/mrv ->
+    logistics): global_admin, global_read, or a dept_user whose department
+    is in `departments`. Inline-call sibling of api/dept_deps.py's
+    require_department, kept here (rather than imported) because every
+    other admin_*.py gate already follows this user-argument calling
+    convention, not FastAPI's Depends-factory one."""
+    if user.is_global:
+        return
+    if user.role == "dept_user" and user.department in departments:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            "this endpoint requires a global_admin/global_read role, "
+            f"or a dept_user in one of: {', '.join(sorted(departments))}"
+        ),
+    )
+
+
+def require_global_admin_or_department(user: CurrentUser, *departments: str) -> None:
+    """Write-tier gate: global_admin, or a dept_user whose department is in
+    `departments`. global_read is excluded (same read-only intent as
+    require_global_admin above)."""
+    if user.role == "global_admin":
+        return
+    if user.role == "dept_user" and user.department in departments:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            "this action requires the global_admin role, "
+            f"or a dept_user in one of: {', '.join(sorted(departments))}"
+        ),
+    )

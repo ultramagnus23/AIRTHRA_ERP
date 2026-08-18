@@ -18,7 +18,15 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .. import erp_storage
 from ..deps import CurrentUser, db_session, get_current_user
-from .admin_common import require_global, require_global_admin
+from .admin_common import require_global_admin_or_department, require_global_or_department
+
+
+def require_global(user: CurrentUser) -> None:
+    require_global_or_department(user, "finance")
+
+
+def require_global_admin(user: CurrentUser) -> None:
+    require_global_admin_or_department(user, "finance")
 
 router = APIRouter(prefix="/admin", tags=["admin-billing"])
 

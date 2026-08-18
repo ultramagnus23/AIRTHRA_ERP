@@ -38,7 +38,7 @@ async def login(body: LoginRequest, request: Request) -> LoginResponse:
     async with global_engine.connect() as conn:
         row = (
             await conn.execute(
-                text("SELECT user_id, pw_hash, role FROM users WHERE email = :email"),
+                text("SELECT user_id, pw_hash, role, department FROM users WHERE email = :email"),
                 {"email": body.email},
             )
         ).mappings().first()
@@ -59,7 +59,7 @@ async def login(body: LoginRequest, request: Request) -> LoginResponse:
             )
 
         plant_ids: list[str] = []
-        if jwt_role not in security.GLOBAL_JWT_ROLES:
+        if jwt_role == "tenant_read":
             plant_ids = list(
                 (
                     await conn.execute(
@@ -70,7 +70,8 @@ async def login(body: LoginRequest, request: Request) -> LoginResponse:
             )
 
     ratelimit.clear_failures(body.email)
+    department = row["department"] if jwt_role == "dept_user" else None
     token = security.create_access_token(
-        user_id=str(row["user_id"]), role=jwt_role, plant_ids=plant_ids
+        user_id=str(row["user_id"]), role=jwt_role, plant_ids=plant_ids, department=department
     )
-    return LoginResponse(access_token=token, role=jwt_role, plant_ids=plant_ids)
+    return LoginResponse(access_token=token, role=jwt_role, plant_ids=plant_ids, department=department)
