@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   // Non-sensitive claims are echoed back so the client can redirect
   // immediately without a round-trip to /api/session; the token itself
   // never appears in this JSON body.
-  const res = NextResponse.json({ role: data.role, plant_ids: data.plant_ids });
+  const res = NextResponse.json({ role: data.role, plant_ids: data.plant_ids, department: data.department });
   res.cookies.set(AUTH_COOKIE, data.access_token, {
     httpOnly: true,
     sameSite: "lax",

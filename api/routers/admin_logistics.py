@@ -65,7 +65,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from ..deps import CurrentUser, db_session, get_current_user
-from .admin_common import require_global
+from .admin_common import require_global_or_department
+
+
+def require_global(user: CurrentUser) -> None:
+    require_global_or_department(user, "logistics")
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 load_dotenv(os.path.join(_ROOT, ".env"))

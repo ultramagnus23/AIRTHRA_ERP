@@ -5,13 +5,18 @@
 // so the admin/ERP/driver route groups other agents build on top of
 // this scaffold can import the same types instead of re-declaring them.
 
-/** The three JWT roles api/security.py issues (DB_ROLE_TO_JWT_ROLE). */
-export type JwtRole = "tenant_read" | "global_admin" | "global_read";
+/** The four JWT roles api/security.py issues (DB_ROLE_TO_JWT_ROLE). */
+export type JwtRole = "tenant_read" | "global_admin" | "global_read" | "dept_user";
+
+/** api/security.py's DEPARTMENTS - the business functions a dept_user can be scoped to. */
+export type Department = "finance" | "procurement" | "engineering" | "sales" | "logistics";
 
 export interface SessionUser {
   userId: string;
   role: JwtRole;
   plantIds: string[];
+  /** Only set (and only meaningful) when role === "dept_user". */
+  department: Department | null;
   /** Unix seconds, from the JWT `exp` claim. */
   exp: number;
 }
@@ -21,6 +26,7 @@ export interface LoginResponse {
   token_type: string;
   role: JwtRole;
   plant_ids: string[];
+  department: Department | null;
 }
 
 /**

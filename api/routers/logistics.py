@@ -27,6 +27,17 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from .. import db
 from ..deps import CurrentUser, db_session, get_current_user, require_plant_access
 
+
+def _require_dispatch_access(user: CurrentUser, plant_id: str) -> None:
+    """Trips aren't scoped to one plant's tenant the way readings/alarms
+    are - a logistics dept_user needs to dispatch to any plant, same as a
+    global user. api/deps.py's require_plant_access itself stays
+    untouched (it's the P2 gate's own security boundary, shared with
+    other phases); this just adds one more allowed path in front of it."""
+    if user.role == "dept_user" and user.department == "logistics":
+        return
+    require_plant_access(user, plant_id)
+
 router = APIRouter(prefix="/logistics", tags=["logistics"])
 
 
@@ -47,7 +58,7 @@ async def start_trip(
     conn: AsyncConnection = Depends(db_session),
 ):
     if body.dest_plant_id is not None:
-        require_plant_access(user, body.dest_plant_id)
+        _require_dispatch_access(user, body.dest_plant_id)
 
     trip_id = str(uuid.uuid4())
     token = secrets.token_urlsafe(32)
@@ -90,7 +101,7 @@ async def list_trips(
     conn: AsyncConnection = Depends(db_session),
 ):
     if dest_plant_id is not None:
-        require_plant_access(user, dest_plant_id)
+        _require_dispatch_access(user, dest_plant_id)
     rows = (
         await conn.execute(
             text(
@@ -193,7 +204,7 @@ async def get_trip_pings(
     if trip is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"trip '{trip_id}' not found")
     if trip[0] is not None:
-        require_plant_access(user, trip[0])
+        _require_dispatch_access(user, trip[0])
     rows = (
         await conn.execute(
             text("SELECT trip_id, ts, lat, lon, speed FROM trip_pings WHERE trip_id = :id ORDER BY ts"),

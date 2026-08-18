@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
+import { DEPARTMENT_HOME } from "@/lib/departments";
 
 // Root landing: routes an authenticated tenant_read user straight into
 // their plant dashboard, and a global_admin/global_read user into the
@@ -21,6 +22,9 @@ export default async function Home() {
   }
   if (session.role === "global_admin" || session.role === "global_read") {
     redirect("/fleet");
+  }
+  if (session.role === "dept_user" && session.department) {
+    redirect(DEPARTMENT_HOME[session.department]);
   }
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-2 bg-bg p-8 text-center">

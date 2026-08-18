@@ -17,12 +17,19 @@ from .db import close_err, close_ok, open_scoped_connection
 
 
 class CurrentUser:
-    __slots__ = ("user_id", "role", "plant_ids")
+    __slots__ = ("user_id", "role", "plant_ids", "department")
 
-    def __init__(self, user_id: str, role: str, plant_ids: list[str]):
+    def __init__(
+        self,
+        user_id: str,
+        role: str,
+        plant_ids: list[str],
+        department: str | None = None,
+    ):
         self.user_id = user_id
         self.role = role
         self.plant_ids = plant_ids
+        self.department = department
 
     @property
     def is_global(self) -> bool:
@@ -41,6 +48,7 @@ def decode_user(token: str) -> CurrentUser:
         user_id=payload.get("sub", ""),
         role=payload.get("role", ""),
         plant_ids=payload.get("plant_ids", []) or [],
+        department=payload.get("department"),
     )
 
 

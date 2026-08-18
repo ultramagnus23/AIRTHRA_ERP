@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logout } from "@/lib/api";
+import { DEPARTMENT_ERP_PAGES } from "@/lib/departments";
+import type { Department } from "@/lib/types";
 
 // ERP has far more sections than client/admin (13 links), so rather than
 // force them into one line with an internal scrollbar (tried, rendered
@@ -27,9 +29,24 @@ const ALL_TABS = [
   { href: "/dispatch", label: "Dispatch" },
 ];
 
-export default function ErpNav({ role }: { role: string }) {
+export default function ErpNav({
+  role,
+  department,
+}: {
+  role: string;
+  department?: Department | null;
+}) {
   const pathname = usePathname();
   const router = useRouter();
+
+  // A dept_user only ever sees their own department's tabs - showing the
+  // rest would just be a row of links that 403 on click (proxy.ts's own
+  // gate, before the click even reaches the page). global_admin/global_read
+  // still see every tab, unchanged.
+  const visibleTabs =
+    role === "dept_user" && department
+      ? ALL_TABS.filter((tab) => DEPARTMENT_ERP_PAGES[department].includes(tab.href))
+      : ALL_TABS;
 
   async function handleLogout() {
     await logout();
@@ -70,14 +87,16 @@ export default function ErpNav({ role }: { role: string }) {
       >
         {/* row 1: wordmark + eyebrow, role, sign out */}
         <div className="flex items-center justify-between">
-          <Link href="/vendors" className="flex items-baseline gap-2 leading-none">
+          <Link href={visibleTabs[0]?.href ?? "/vendors"} className="flex items-baseline gap-2 leading-none">
             <span className="font-display text-lg font-medium text-fg">
               Airthra<span className="text-copper">.</span>
             </span>
             <span className="font-mono text-[10px] tracking-[0.2em] text-copper uppercase">ERP</span>
           </Link>
           <div className="flex items-center gap-3">
-            <span className="hidden font-mono text-[10px] text-mist sm:inline">{role}</span>
+            <span className="hidden font-mono text-[10px] text-mist sm:inline">
+              {role === "dept_user" ? department : role}
+            </span>
             <button
               onClick={handleLogout}
               className="text-sm text-mist transition-colors duration-150 hover:text-fg"
@@ -87,9 +106,9 @@ export default function ErpNav({ role }: { role: string }) {
           </div>
         </div>
 
-        {/* row 2: every section, centered, wraps freely */}
+        {/* row 2: every section this user can reach, centered, wraps freely */}
         <nav className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1 border-t border-hair pt-2">
-          {ALL_TABS.map(tabLink)}
+          {visibleTabs.map(tabLink)}
         </nav>
       </header>
     </div>

@@ -27,7 +27,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from ..erp_calc import fiscal_year_label, format_po_no, gst_split_for_line
-from ..erp_deps import CurrentUser, db_session, erp_admin_user, erp_read_user
+from ..dept_deps import CurrentUser, db_session, require_department, require_department_admin
+
+erp_read_user = require_department("procurement")
+erp_admin_user = require_department_admin("procurement")
 from ..erp_pdf import build_po_pdf
 from ..erp_storage import UploadFailed, upload_bytes
 

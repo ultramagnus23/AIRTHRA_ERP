@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logout } from "@/lib/api";
+import { DEPARTMENT_ADMIN_PAGES } from "@/lib/departments";
+import type { Department } from "@/lib/types";
 
 // Mirrors ClientNavBar.tsx's detached floating pill pattern exactly (same
 // grid-cols-[1fr_auto_1fr] zones, glass background, centered serif
@@ -26,9 +28,23 @@ const RIGHT_TABS = [
   { href: "/tenants", label: "Tenants" },
 ];
 
-export default function AdminNavBar({ role }: { role: string }) {
+export default function AdminNavBar({
+  role,
+  department,
+}: {
+  role: string;
+  department?: Department | null;
+}) {
   const pathname = usePathname();
   const router = useRouter();
+
+  // Fleet/Triage/Metrics/Risk/Tenants stay global_admin/global_read only
+  // (see (admin)/layout.tsx) - a dept_user only ever sees the admin-side
+  // pages their own department owns, same filtering ErpNav does.
+  const isDept = role === "dept_user" && department;
+  const deptPages = isDept ? DEPARTMENT_ADMIN_PAGES[department] : null;
+  const visibleLeft = deptPages ? LEFT_TABS.filter((t) => deptPages.includes(t.href)) : LEFT_TABS;
+  const visibleRight = deptPages ? RIGHT_TABS.filter((t) => deptPages.includes(t.href)) : RIGHT_TABS;
 
   async function handleLogout() {
     await logout();
@@ -71,14 +87,17 @@ export default function AdminNavBar({ role }: { role: string }) {
         {/* left zone */}
         <div className="flex items-center gap-1 justify-self-start">
           <span className="mr-2 hidden rounded-full border border-line px-2.5 py-0.5 font-mono text-xs text-mist sm:inline">
-            {role}
+            {isDept ? department : role}
           </span>
-          <nav className="hidden items-center gap-1 md:flex">{LEFT_TABS.map(tabLink)}</nav>
+          <nav className="hidden items-center gap-1 md:flex">{visibleLeft.map(tabLink)}</nav>
         </div>
 
         {/* center wordmark + eyebrow */}
         <div className="flex flex-col items-center justify-self-center">
-          <Link href="/fleet" className="font-display text-lg font-medium text-fg">
+          <Link
+            href={visibleLeft[0]?.href ?? visibleRight[0]?.href ?? "/fleet"}
+            className="font-display text-lg font-medium text-fg"
+          >
             Airthra<span className="text-copper">.</span>
           </Link>
           <span className="mt-0.5 font-mono text-[10px] tracking-[0.15em] text-mist uppercase">
@@ -88,7 +107,7 @@ export default function AdminNavBar({ role }: { role: string }) {
 
         {/* right zone */}
         <div className="flex items-center gap-1 justify-self-end">
-          <nav className="hidden items-center gap-1 md:flex">{RIGHT_TABS.map(tabLink)}</nav>
+          <nav className="hidden items-center gap-1 md:flex">{visibleRight.map(tabLink)}</nav>
           <button
             onClick={handleLogout}
             className="ml-2 text-sm text-mist transition-colors duration-150 hover:text-fg"
@@ -100,7 +119,7 @@ export default function AdminNavBar({ role }: { role: string }) {
 
       {/* mobile: full tab row beneath the pill, mirroring ClientNavBar */}
       <nav className="mt-2 flex justify-center gap-1 overflow-x-auto md:hidden">
-        {[...LEFT_TABS, ...RIGHT_TABS].map(tabLink)}
+        {[...visibleLeft, ...visibleRight].map(tabLink)}
       </nav>
     </div>
   );

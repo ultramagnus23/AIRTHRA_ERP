@@ -26,7 +26,7 @@
 // and re-checks plant scoping on every single proxied request via
 // require_plant_access (api/deps.py). That's the actual boundary.
 import { cookies } from "next/headers";
-import type { JwtRole, SessionUser } from "./types";
+import type { Department, JwtRole, SessionUser } from "./types";
 
 export const AUTH_COOKIE = "airthra_token";
 
@@ -46,6 +46,7 @@ export function decodeSessionToken(token: string | undefined | null): SessionUse
       sub?: string;
       role?: JwtRole;
       plant_ids?: string[];
+      department?: Department;
       exp?: number;
     };
     if (!payload.role || !payload.exp) return null;
@@ -54,6 +55,7 @@ export function decodeSessionToken(token: string | undefined | null): SessionUse
       userId: payload.sub ?? "",
       role: payload.role,
       plantIds: payload.plant_ids ?? [],
+      department: payload.department ?? null,
       exp: payload.exp,
     };
   } catch {

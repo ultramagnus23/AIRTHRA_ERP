@@ -62,9 +62,9 @@ global_engine = _make_engine(config.PG_GLOBAL_ROLE, config.PG_GLOBAL_PASSWORD)
 
 
 def engine_for_role(jwt_role: str):
-    from .security import GLOBAL_JWT_ROLES
+    from .security import BYPASS_RLS_JWT_ROLES
 
-    return global_engine if jwt_role in GLOBAL_JWT_ROLES else tenant_engine
+    return global_engine if jwt_role in BYPASS_RLS_JWT_ROLES else tenant_engine
 
 
 async def open_scoped_connection(role: str, plant_ids: list[str]) -> AsyncConnection:
@@ -74,13 +74,17 @@ async def open_scoped_connection(role: str, plant_ids: list[str]) -> AsyncConnec
     transaction (second net for RLS-covered tables). Caller owns
     commit/rollback via the returned connection's transaction and MUST
     close the connection when done (use as an async context manager).
+    dept_user is on the BYPASSRLS engine (see security.BYPASS_RLS_JWT_ROLES)
+    so the set_config call is skipped for it too - it has no plant_ids to
+    scope by, and department access is enforced entirely at the API layer
+    (api/dept_deps.py), not by Postgres RLS.
     """
     engine = engine_for_role(role)
     conn = await engine.connect()
     await conn.begin()
-    from .security import GLOBAL_JWT_ROLES
+    from .security import BYPASS_RLS_JWT_ROLES
 
-    if role not in GLOBAL_JWT_ROLES:
+    if role not in BYPASS_RLS_JWT_ROLES:
         await conn.execute(
             text("SELECT set_config('app.current_plant_ids', :v, true)"),
             {"v": ",".join(plant_ids)},

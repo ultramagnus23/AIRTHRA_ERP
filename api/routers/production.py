@@ -22,8 +22,26 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from ..deps import CurrentUser, db_session, get_current_user, require_plant_access
+from ..dept_deps import require_department, require_department_admin
 
 router = APIRouter(prefix="/erp", tags=["production"])
+
+# GRN(read)/inventory_lots/issue_lines are procurement's concern;
+# fabrication_jobs/unit_serials/qc_records are engineering's. installations
+# (below) is deliberately left on the plain get_current_user +
+# require_plant_access pattern - it's the ERP<->machine-data bridge, tied
+# to a specific plant, not a department's resource.
+#
+# Pre-existing gap closed while adding these: none of this file's
+# endpoints had ANY role gate before this (bare get_current_user, no
+# erp_read_user/erp_admin_user, no require_global) - any authenticated
+# user, including a plant-scoped tenant_read, could reach them. Wiring in
+# require_department/require_department_admin here fixes that as a side
+# effect, not just adds department access.
+_procurement_read = require_department("procurement")
+_procurement_admin = require_department_admin("procurement")
+_engineering_read = require_department("engineering")
+_engineering_admin = require_department_admin("engineering")
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +51,7 @@ router = APIRouter(prefix="/erp", tags=["production"])
 @router.get("/grn")
 async def list_grn(
     po_id: str | None = Query(default=None),
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_procurement_read),
     conn: AsyncConnection = Depends(db_session),
 ):
     rows = (
@@ -55,7 +73,7 @@ async def list_grn(
 @router.get("/grn/{grn_id}")
 async def get_grn(
     grn_id: str,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_procurement_read),
     conn: AsyncConnection = Depends(db_session),
 ):
     grn = (
@@ -115,7 +133,7 @@ class InventoryLotCreate(BaseModel):
 @router.post("/inventory-lots", status_code=status.HTTP_201_CREATED)
 async def create_inventory_lot(
     body: InventoryLotCreate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_procurement_admin),
     conn: AsyncConnection = Depends(db_session),
 ):
     lot_id = str(uuid.uuid4())
@@ -140,7 +158,7 @@ async def create_inventory_lot(
 @router.get("/inventory-lots")
 async def list_inventory_lots(
     material_id: str | None = Query(default=None),
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_procurement_read),
     conn: AsyncConnection = Depends(db_session),
 ):
     rows = (
@@ -163,7 +181,7 @@ async def list_inventory_lots(
 @router.get("/inventory-lots/{lot_id}")
 async def get_inventory_lot(
     lot_id: str,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_procurement_read),
     conn: AsyncConnection = Depends(db_session),
 ):
     row = (
@@ -196,7 +214,7 @@ class IssueLineCreate(BaseModel):
 @router.post("/issue-lines", status_code=status.HTTP_201_CREATED)
 async def create_issue_line(
     body: IssueLineCreate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_procurement_admin),
     conn: AsyncConnection = Depends(db_session),
 ):
     # Atomic debit: the UPDATE's WHERE clause re-checks qty_on_hand >= qty in
@@ -283,7 +301,7 @@ class FabricationJobCreate(BaseModel):
 async def list_fabrication_jobs(
     project_id: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_engineering_read),
     conn: AsyncConnection = Depends(db_session),
 ):
     rows = (
@@ -306,7 +324,7 @@ async def list_fabrication_jobs(
 @router.post("/fabrication-jobs", status_code=status.HTTP_201_CREATED)
 async def create_fabrication_job(
     body: FabricationJobCreate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_engineering_admin),
     conn: AsyncConnection = Depends(db_session),
 ):
     job_id = str(uuid.uuid4())
@@ -343,7 +361,7 @@ class FabricationJobStatusUpdate(BaseModel):
 async def update_fabrication_job_status(
     job_id: str,
     body: FabricationJobStatusUpdate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_engineering_admin),
     conn: AsyncConnection = Depends(db_session),
 ):
     current = (
@@ -400,7 +418,7 @@ class UnitSerialCreate(BaseModel):
 @router.get("/unit-serials")
 async def list_unit_serials(
     project_id: str | None = Query(default=None),
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_engineering_read),
     conn: AsyncConnection = Depends(db_session),
 ):
     """Gap-fill (see fabrication_jobs list above for rationale): needed by
@@ -424,7 +442,7 @@ async def list_unit_serials(
 @router.post("/unit-serials", status_code=status.HTTP_201_CREATED)
 async def create_unit_serial(
     body: UnitSerialCreate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_engineering_admin),
     conn: AsyncConnection = Depends(db_session),
 ):
     try:
@@ -449,7 +467,7 @@ async def create_unit_serial(
 async def update_unit_serial_status(
     serial: str,
     body: UnitSerialStatusUpdate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_engineering_admin),
     conn: AsyncConnection = Depends(db_session),
 ):
     current = (
@@ -504,7 +522,7 @@ class QcRecordCreate(BaseModel):
 @router.post("/qc-records", status_code=status.HTTP_201_CREATED)
 async def create_qc_record(
     body: QcRecordCreate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_engineering_admin),
     conn: AsyncConnection = Depends(db_session),
 ):
     if body.lot_id is None and body.job_id is None and body.unit_serial is None:

@@ -110,6 +110,17 @@ USERS = [
     ("admin@airthra.dev", "global_admin", None),
 ]
 
+# email, department (migrations/versions/0013_department_users.py's five
+# values). Always role='dept_user', never plant-scoped - see
+# api/dept_deps.py for what each department can reach.
+DEPT_USERS = [
+    ("finance@airthra.dev", "finance"),
+    ("procurement@airthra.dev", "procurement"),
+    ("engineering@airthra.dev", "engineering"),
+    ("sales@airthra.dev", "sales"),
+    ("logistics@airthra.dev", "logistics"),
+]
+
 
 def main() -> None:
     engine = create_engine(DATABASE_URL, future=True)
@@ -222,12 +233,42 @@ def main() -> None:
                     {"user_id": user_id, "plant_id": plant_id},
                 )
 
+        for email, department in DEPT_USERS:
+            existing = conn.execute(
+                text("SELECT user_id FROM users WHERE email = :email"), {"email": email}
+            ).fetchone()
+            if existing:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE users SET pw_hash = :pw_hash, role = 'dept_user', department = :department
+                        WHERE user_id = :user_id
+                        """
+                    ),
+                    {"pw_hash": pw_hash, "department": department, "user_id": existing[0]},
+                )
+            else:
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO users (user_id, email, pw_hash, role, department)
+                        VALUES (:user_id, :email, :pw_hash, 'dept_user', :department)
+                        """
+                    ),
+                    {
+                        "user_id": str(uuid.uuid4()),
+                        "email": email,
+                        "pw_hash": pw_hash,
+                        "department": department,
+                    },
+                )
+
     print("Seed complete:")
     print(f"  company:   {COMPANY['name']}")
     print(f"  plant:     {PLANT['plant_id']} ({PLANT['name']})")
     print(f"  sensors:   {len(SENSORS)} for {PLANT['plant_id']}")
     print(f"  materials: {len(MATERIALS)}")
-    print(f"  users:     {len(USERS)} (dev password: {_DEV_PASSWORD!r})")
+    print(f"  users:     {len(USERS) + len(DEPT_USERS)} (dev password: {_DEV_PASSWORD!r})")
 
 
 if __name__ == "__main__":

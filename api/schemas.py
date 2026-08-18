@@ -21,6 +21,7 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     role: str
     plant_ids: list[str]
+    department: str | None = None
 
 
 class ReadingOut(BaseModel):
