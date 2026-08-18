@@ -77,11 +77,17 @@ export default function ErpNav({
   }
 
   return (
-    <div className="sticky top-4 z-10 mx-4">
+    // will-change/translateZ promote this sticky+backdrop-blur header to
+    // its own GPU layer - without it, a sticky element carrying
+    // backdrop-filter re-samples everything scrolling underneath it every
+    // frame, a well-documented scroll-jank source. See ClientNavBar.tsx's
+    // identical fix for the fuller rationale.
+    <div className="sticky top-4 z-10 mx-4" style={{ willChange: "transform" }}>
       <header
         style={{
           background: "var(--glass-bg)",
           boxShadow: "var(--shadow-md)",
+          transform: "translateZ(0)",
         }}
         className="mx-auto flex w-full max-w-6xl flex-col gap-2 rounded-3xl border border-hair px-6 py-3 backdrop-blur-md backdrop-saturate-150"
       >

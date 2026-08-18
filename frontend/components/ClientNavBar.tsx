@@ -64,12 +64,21 @@ export default function ClientNavBar({
   }
 
   return (
-    <div className="sticky top-4 z-10 mx-4">
+    // will-change: transform promotes this sticky element to its own GPU
+    // compositor layer. Without it, a sticky/fixed element carrying
+    // backdrop-filter (the blur below) forces the browser to re-sample
+    // everything scrolling underneath it on every single frame - a
+    // well-documented scroll-jank source, worse the taller the page below
+    // it (History, with its long chart + sensor checklist, is exactly the
+    // page where this would be most noticeable). Layer promotion lets the
+    // browser cache the blurred backdrop as a texture instead.
+    <div className="sticky top-4 z-10 mx-4" style={{ willChange: "transform" }}>
       <header
         style={{
           height: "var(--nav-h)",
           background: "var(--glass-bg)",
           boxShadow: "var(--shadow-md)",
+          transform: "translateZ(0)",
         }}
         className="mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-4 rounded-full border border-hair px-6 backdrop-blur-md backdrop-saturate-150"
       >
