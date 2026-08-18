@@ -40,7 +40,9 @@ from .admin_common import require_global, require_global_admin
 router = APIRouter(tags=["admin-tenants"])
 
 INVITE_EXPIRY_HOURS = 72
-_DB_ROLES = ("global_admin", "global_read", "plant_admin", "plant_operator", "plant_viewer")
+_DB_ROLES = (
+    "global_admin", "global_read", "plant_admin", "plant_operator", "plant_viewer", "dept_user",
+)
 
 
 def _hash_token(token: str) -> str:
@@ -188,6 +190,17 @@ class UserIn(BaseModel):
     # global_admin/global_read - a global role scoped to specific plants
     # is a contradiction the API should reject, not silently accept.
     plant_ids: list[str] = Field(default_factory=list)
+    # Required for role='dept_user' (one of security.DEPARTMENTS), must be
+    # None for every other role - same "no contradictory scoping" rule as
+    # plant_ids above, just on the department axis instead of the plant one.
+    department: str | None = None
+
+
+class UserPatch(BaseModel):
+    role: str | None = None
+    department: str | None = None
+    plant_ids: list[str] | None = None
+    is_active: bool | None = None
 
 
 @router.get("/admin/users")
@@ -200,7 +213,7 @@ async def list_users(
         await conn.execute(
             text(
                 """
-                SELECT u.user_id, u.email, u.role, u.created_at,
+                SELECT u.user_id, u.email, u.role, u.department, u.is_active, u.created_at,
                        COALESCE(array_agg(up.plant_id) FILTER (WHERE up.plant_id IS NOT NULL), '{}') AS plant_ids,
                        EXISTS (
                            SELECT 1 FROM user_invites i
@@ -208,7 +221,7 @@ async def list_users(
                        ) AS invite_pending
                 FROM users u
                 LEFT JOIN user_plants up ON up.user_id = u.user_id
-                GROUP BY u.user_id, u.email, u.role, u.created_at
+                GROUP BY u.user_id, u.email, u.role, u.department, u.is_active, u.created_at
                 ORDER BY u.created_at DESC
                 """
             )
@@ -233,10 +246,18 @@ async def create_user(
     if body.role not in _DB_ROLES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"role must be one of {_DB_ROLES}")
     is_plant_role = body.role.startswith("plant_")
+    is_dept_role = body.role == "dept_user"
     if is_plant_role and not body.plant_ids:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"role '{body.role}' requires at least one plant_id")
     if not is_plant_role and body.plant_ids:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"role '{body.role}' is global and must not carry plant_ids")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"role '{body.role}' must not carry plant_ids")
+    if is_dept_role and body.department not in security.DEPARTMENTS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"role 'dept_user' requires department to be one of {sorted(security.DEPARTMENTS)}",
+        )
+    if not is_dept_role and body.department is not None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"role '{body.role}' must not carry a department")
 
     exists = (await conn.execute(text("SELECT 1 FROM users WHERE email = :e"), {"e": body.email})).first()
     if exists:
@@ -260,12 +281,12 @@ async def create_user(
         await conn.execute(
             text(
                 """
-                INSERT INTO users (email, pw_hash, role)
-                VALUES (:email, :pw_hash, :role)
+                INSERT INTO users (email, pw_hash, role, department)
+                VALUES (:email, :pw_hash, :role, :department)
                 RETURNING user_id
                 """
             ),
-            {"email": body.email, "pw_hash": placeholder_hash, "role": body.role},
+            {"email": body.email, "pw_hash": placeholder_hash, "role": body.role, "department": body.department},
         )
     ).first()
     new_user_id = str(row[0])
@@ -290,7 +311,7 @@ async def create_user(
 
     await _write_audit(
         conn, user.user_id, "user.created", "user", new_user_id,
-        {"email": body.email, "role": body.role, "plant_ids": body.plant_ids},
+        {"email": body.email, "role": body.role, "plant_ids": body.plant_ids, "department": body.department},
     )
 
     return {
@@ -298,11 +319,98 @@ async def create_user(
         "email": body.email,
         "role": body.role,
         "plant_ids": body.plant_ids,
+        "department": body.department,
         # Returned exactly once. The DB only ever stores its hash - if
         # this response is lost, use POST /admin/users/{id}/reinvite.
         "invite_token": token,
         "invite_expires_at": expires_at.isoformat(),
     }
+
+
+@router.patch("/admin/users/{user_id}")
+async def patch_user(
+    user_id: str,
+    body: UserPatch,
+    user: CurrentUser = Depends(get_current_user),
+    conn: AsyncConnection = Depends(db_session),
+):
+    """Edits an existing account's role/department/plant scoping, or
+    flips is_active - the piece POST /admin/users alone can't do (that
+    endpoint only ever creates a brand new invite-pending user). Every
+    field is optional; only what's provided is changed."""
+    require_global_admin(user)
+
+    existing = (
+        await conn.execute(text("SELECT role, department FROM users WHERE user_id = :u"), {"u": user_id})
+    ).mappings().first()
+    if existing is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="user not found")
+
+    if body.is_active is False and user_id == user.user_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="cannot deactivate your own account")
+
+    new_role = body.role if body.role is not None else existing["role"]
+    new_department = body.department if "department" in body.model_fields_set else existing["department"]
+    if new_role not in _DB_ROLES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"role must be one of {_DB_ROLES}")
+    is_plant_role = new_role.startswith("plant_")
+    is_dept_role = new_role == "dept_user"
+    if is_dept_role and new_department not in security.DEPARTMENTS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"role 'dept_user' requires department to be one of {sorted(security.DEPARTMENTS)}",
+        )
+    if not is_dept_role and new_department is not None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"role '{new_role}' must not carry a department")
+
+    if body.plant_ids is not None:
+        if not is_plant_role and body.plant_ids:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"role '{new_role}' must not carry plant_ids")
+        if is_plant_role and not body.plant_ids:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"role '{new_role}' requires at least one plant_id")
+        if body.plant_ids:
+            found = (
+                await conn.execute(text("SELECT plant_id FROM plants WHERE plant_id = ANY(:p)"), {"p": body.plant_ids})
+            ).scalars().all()
+            missing = set(body.plant_ids) - set(found)
+            if missing:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"unknown plant_id(s): {sorted(missing)}")
+    elif is_plant_role != existing["role"].startswith("plant_"):
+        # Role is changing across the plant-scoped/not-plant-scoped line
+        # but plant_ids wasn't supplied - refuse rather than silently
+        # leaving stale user_plants rows (an old plant grant surviving a
+        # role change to dept_user would be a real privilege leak).
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="changing to/from a plant-scoped role requires plant_ids in the same request",
+        )
+
+    await conn.execute(
+        text(
+            """
+            UPDATE users SET
+                role = :role,
+                department = :department,
+                is_active = COALESCE(:is_active, is_active)
+            WHERE user_id = :u
+            """
+        ),
+        {"role": new_role, "department": new_department, "is_active": body.is_active, "u": user_id},
+    )
+
+    if body.plant_ids is not None:
+        await conn.execute(text("DELETE FROM user_plants WHERE user_id = :u"), {"u": user_id})
+        for plant_id in body.plant_ids:
+            await conn.execute(
+                text("INSERT INTO user_plants (user_id, plant_id) VALUES (:u, :p)"),
+                {"u": user_id, "p": plant_id},
+            )
+
+    await _write_audit(
+        conn, user.user_id, "user.updated", "user", user_id,
+        {"role": new_role, "department": new_department, "plant_ids": body.plant_ids, "is_active": body.is_active},
+    )
+    return {"user_id": user_id, "role": new_role, "department": new_department, "is_active": body.is_active}
 
 
 @router.post("/admin/users/{user_id}/reinvite", status_code=status.HTTP_201_CREATED)

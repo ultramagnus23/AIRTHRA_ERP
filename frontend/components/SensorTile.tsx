@@ -35,6 +35,7 @@ export default function SensorTile({
   threshold,
   note,
   index = 0,
+  wired,
 }: {
   label: string;
   unit: string;
@@ -58,6 +59,12 @@ export default function SensorTile({
   note?: string;
   /** Position in the grid, for the staggered entrance cascade. */
   index?: number;
+  /** false = catalogued FEED register tag with no sensor installed yet.
+   * Renders as a plain "--" placeholder, dashed border, no flag/sparkline/
+   * range bar - visually distinct from "wired but momentarily no data"
+   * (which still shows "no data yet" under an em-dash). Never a faked
+   * reading. */
+  wired?: boolean;
 }) {
   const info = flag !== null ? qualityInfo(flag) : null;
   const isGood = info?.isGood ?? true;
@@ -84,6 +91,31 @@ export default function SensorTile({
     range && value !== null
       ? Math.min(100, Math.max(0, ((value - range.min) / (range.max - range.min)) * 100))
       : null;
+
+  if (wired === false) {
+    return (
+      <div
+        className="relative overflow-hidden rounded-2xl border border-dashed border-line bg-panel/40 p-4 opacity-70"
+        style={{ animationDelay: `calc(var(--stagger) * ${index})` }}
+      >
+        <span className="flex min-w-0 flex-col gap-0.5" title={purpose}>
+          <span className="flex items-center gap-1.5 font-mono text-xs tracking-[0.08em] text-mist uppercase">
+            <span className="inline-block h-1.5 w-1.5 rounded-full border border-mist" aria-hidden />
+            {label}
+          </span>
+          {tag && (
+            <span className="font-mono text-[10px] tracking-[0.12em] text-mist">{tag}</span>
+          )}
+        </span>
+        <div className="mt-2 font-mono text-2xl font-medium tabular-nums text-mist">
+          -- <span className="text-sm font-normal">{unit}</span>
+        </div>
+        <div className="mt-2 font-mono text-[10px] leading-snug text-mist">
+          Register tag, not yet wired to hardware.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

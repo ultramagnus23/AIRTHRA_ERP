@@ -97,6 +97,25 @@ export default function HistoryChart({ plantId }: { plantId: string }) {
 
   const rows = useMemo(() => (data ? toChartRows(data) : []), [data]);
 
+  // Sensors span wildly different ranges/units (SO2: 0-5000ppm, pH: 0-14,
+  // level: 0-100%) - plotting them all on one shared Y-axis was the actual
+  // bug behind "the graphs aren't proper": anything not SO2-scale rendered
+  // as a flat line pinned to the bottom. Each distinct unit among the
+  // currently-selected sensors gets its own axis instead, so every line
+  // uses its own natural scale; the tooltip still shows real (not
+  // normalized) values regardless of which axis a line is drawn against.
+  const units = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          selected
+            .map((id) => SENSOR_MANIFEST.find((s) => s.sensor_id === id)?.unit)
+            .filter((u): u is string => !!u),
+        ),
+      ),
+    [selected],
+  );
+
   function toggleSensor(id: string) {
     setSelected((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   }
@@ -174,7 +193,27 @@ export default function HistoryChart({ plantId }: { plantId: string }) {
                   tickLine={false}
                   axisLine={{ stroke: "var(--color-line)" }}
                 />
-                <YAxis fontSize={10} fontFamily="var(--font-mono)" stroke="var(--color-mist)" tickLine={false} axisLine={false} />
+                {units.map((unit, i) => (
+                  <YAxis
+                    key={unit}
+                    yAxisId={unit}
+                    orientation={i % 2 === 0 ? "left" : "right"}
+                    // Only the first axis on each side gets a visible line/ticks -
+                    // stacking more than 2 would clutter the chart, but every
+                    // unit still gets its own independent scale either way.
+                    hide={i >= 2}
+                    fontSize={10}
+                    fontFamily="var(--font-mono)"
+                    stroke="var(--color-mist)"
+                    tickLine={false}
+                    axisLine={i < 2 ? { stroke: "var(--color-line)" } : false}
+                    label={
+                      i < 2
+                        ? { value: unit, position: i % 2 === 0 ? "insideLeft" : "insideRight", fontSize: 10, fill: "var(--color-mist)" }
+                        : undefined
+                    }
+                  />
+                ))}
                 <Tooltip
                   labelFormatter={(v) => new Date(String(v)).toLocaleString()}
                   contentStyle={{
@@ -186,17 +225,21 @@ export default function HistoryChart({ plantId }: { plantId: string }) {
                   }}
                 />
                 <Legend wrapperStyle={{ fontFamily: "var(--font-body)", fontSize: 11, color: "var(--color-mist)" }} />
-                {selected.map((id, i) => (
-                  <Line
-                    key={id}
-                    type="monotone"
-                    dataKey={id}
-                    stroke={COLORS[i % COLORS.length]}
-                    dot={false}
-                    connectNulls
-                    isAnimationActive={false}
-                  />
-                ))}
+                {selected.map((id, i) => {
+                  const unit = SENSOR_MANIFEST.find((s) => s.sensor_id === id)?.unit;
+                  return (
+                    <Line
+                      key={id}
+                      type="monotone"
+                      dataKey={id}
+                      yAxisId={unit ?? units[0]}
+                      stroke={COLORS[i % COLORS.length]}
+                      dot={false}
+                      connectNulls
+                      isAnimationActive={false}
+                    />
+                  );
+                })}
               </LineChart>
             </ResponsiveContainer>
           </div>

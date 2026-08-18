@@ -7,14 +7,23 @@
 // Kept separate from lib/types.ts (shared/owned by the scaffold) per the
 // admin-console build brief - avoids any chance of colliding with the
 // concurrent ERP/driver agents editing that file.
-import type { AlarmSeverity, AlarmState } from "./types";
+import type { AlarmSeverity, AlarmState, Department } from "./types";
 
 // DB roles (users.role's CHECK constraint) - not the JWT roles. The three
 // plant_* roles all currently decode to the same JWT role (tenant_read,
 // see api/security.py DB_ROLE_TO_JWT_ROLE) and so behave identically
 // today; the distinct DB values are kept for when that changes, and
 // exposed here for accuracy rather than collapsing them in the UI too.
-export type DbRole = "global_admin" | "global_read" | "plant_admin" | "plant_operator" | "plant_viewer";
+// dept_user is the odd one out: it decodes to its own JWT role
+// (api/security.py DB_ROLE_TO_JWT_ROLE["dept_user"] = "dept_user"), scoped
+// by `department` instead of `plant_ids` - see api/dept_deps.py.
+export type DbRole =
+  | "global_admin"
+  | "global_read"
+  | "plant_admin"
+  | "plant_operator"
+  | "plant_viewer"
+  | "dept_user";
 
 export interface AdminPlantSummary {
   plant_id: string;
@@ -54,6 +63,8 @@ export interface AdminUserSummary {
   user_id: string;
   email: string;
   role: DbRole;
+  department: Department | null;
+  is_active: boolean;
   created_at: string;
   plant_ids: string[];
   invite_pending: boolean;
@@ -67,6 +78,7 @@ export interface CreateUserInput {
   email: string;
   role: DbRole;
   plant_ids: string[];
+  department: Department | null;
 }
 
 export interface CreateUserResult {
@@ -74,8 +86,23 @@ export interface CreateUserResult {
   email: string;
   role: DbRole;
   plant_ids: string[];
+  department: Department | null;
   invite_token: string;
   invite_expires_at: string;
+}
+
+export interface PatchUserInput {
+  role?: DbRole;
+  department?: Department | null;
+  plant_ids?: string[];
+  is_active?: boolean;
+}
+
+export interface PatchUserResult {
+  user_id: string;
+  role: DbRole;
+  department: Department | null;
+  is_active: boolean | null;
 }
 
 export interface AuditLogEntry {
@@ -227,6 +254,10 @@ export type FleetColor = "green" | "yellow" | "red" | "gray";
 export interface FleetEntry {
   plant_id: string;
   name: string;
+  lat: number | null;
+  lon: number | null;
+  boiler_capacity_tpd: number | null;
+  commissioning_date: string | null;
   color: FleetColor;
   reasons: string[];
   last_reading_ts: string | null;

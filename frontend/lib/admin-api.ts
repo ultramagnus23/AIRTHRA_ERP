@@ -41,6 +41,8 @@ import type {
   LeadStage,
   MetricsResponse,
   MrvExportResponse,
+  PatchUserInput,
+  PatchUserResult,
   ProductBatch,
   RiskScoresResponse,
 } from "./admin-types";
@@ -154,6 +156,13 @@ export function reinviteUser(userId: string) {
     `/admin/users/${userId}/reinvite`,
     { method: "POST" },
   );
+}
+
+export function patchUser(userId: string, body: PatchUserInput) {
+  return request<PatchUserResult>(`/admin/users/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
 }
 
 export function getAuditLog(limit: number = 100) {
