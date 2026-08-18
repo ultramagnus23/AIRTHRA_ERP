@@ -31,9 +31,21 @@
   --color-moss: oklch(0.64 0.1 152);
   --color-sand: oklch(0.935 0.062 96);
 
-  /* Motion, copied from the parent brand */
+  /* Motion, copied from the parent brand.
+     airthra.com pairs these curves with long, editorial durations
+     (0.55-0.9s) appropriate to a marketing hero. This is an instrument
+     panel someone drives all day, so we keep the brand's exact curves
+     and cut the durations hard - the identity lives in the easing, not
+     the wait. Interactive feedback stays under 200ms; only entrances
+     and data pulses run longer. */
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-x: cubic-bezier(0.19, 1, 0.22, 1);
+  --dur-fast: 140ms;
+  --dur: 200ms;
+  --dur-slow: 420ms;
+  /* Stagger increment for sequential reveals - matches the parent
+     brand's own ~60ms cascade between adjacent elements. */
+  --stagger: 60ms;
 
   --nav-h: 64px;
 
@@ -80,4 +92,107 @@
 :focus-visible {
   outline: 2px solid var(--color-copper);
   outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------
+ * Motion vocabulary
+ *
+ * Every animation below is gated on prefers-reduced-motion. This is not
+ * boilerplate politeness: a control-room screen sits in peripheral vision
+ * for hours, and for a vestibular-sensitive operator continuous movement
+ * is genuinely disabling. Reduced-motion collapses everything to instant
+ * state changes - no information is conveyed by motion alone.
+ * ------------------------------------------------------------------- */
+
+/* Entrance: content lifts in on the brand curve. Paired with an inline
+   animation-delay of calc(var(--stagger) * n) for the cascade. */
+@keyframes air-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Live-data pulse: fires when a sensor value actually changes, so
+   "this number is live" is legible without watching the timestamp.
+   Borrowed from the parent brand's own `blip` keyframe. */
+@keyframes air-blip {
+  0% {
+    background-color: color-mix(in oklch, var(--color-copper) 22%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.air-rise {
+  animation: air-rise var(--dur-slow) var(--ease) both;
+}
+
+.air-blip {
+  animation: air-blip 900ms var(--ease);
+}
+
+/* Interactive surfaces: lift slightly toward the viewer on hover.
+   Fast (var(--dur-fast)) so it reads as responsiveness, not decoration. */
+.air-lift {
+  transition:
+    transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+.air-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* The parent brand's signature hover: letter-spacing opens up slightly
+   as color shifts. Reserved for nav/link text. */
+.air-track {
+  transition:
+    color var(--dur) var(--ease),
+    letter-spacing var(--dur-slow) var(--ease);
+}
+.air-track:hover {
+  letter-spacing: 0.04em;
+}
+
+/* Horizontal scroller with no visible scrollbar. Used for the mobile nav
+   row, where a native scrollbar rendered as a grey bar bleeding across
+   the chrome. Scrolling still works by touch/trackpad/keyboard - only the
+   scrollbar's painting is suppressed, not the overflow behaviour. */
+.air-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.air-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .air-rise,
+  .air-blip {
+    animation: none;
+  }
+  .air-lift,
+  .air-track {
+    transition: none;
+  }
+  .air-lift:hover {
+    transform: none;
+  }
+  .air-track:hover {
+    letter-spacing: normal;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

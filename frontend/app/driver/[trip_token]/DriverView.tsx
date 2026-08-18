@@ -36,7 +36,15 @@ const PING_INTERVAL_MS = 30_000;
 type Phase = "idle" | "pinging" | "stopped" | "link_error";
 
 export default function DriverView({ tripToken }: { tripToken: string }) {
-  const parsed = useRef(parseTripToken(tripToken)).current;
+  // Lazy useState initializer, not useRef(...).current: tripToken is a
+  // route param that never changes across this component's lifetime, so
+  // "compute once, keep across renders" is exactly what useState's
+  // lazy-init form is for - and unlike a ref, reading the result during
+  // render (used directly in JSX below) is the React-sanctioned way to
+  // do it. Reading .current during render is a real anti-pattern
+  // (react-hooks/refs): React makes no guarantee a ref write is visible
+  // by the time the component that reads it re-renders.
+  const [parsed] = useState(() => parseTripToken(tripToken));
 
   const [phase, setPhase] = useState<Phase>(parsed ? "idle" : "link_error");
   const [pings, setPings] = useState<PingResult[]>([]);
@@ -44,6 +52,20 @@ export default function DriverView({ tripToken }: { tripToken: string }) {
   const [apiError, setApiError] = useState<string | null>(null);
   const [pingCount, setPingCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Declared before sendPing, which references it in its error-handling
+  // path (an invalid/unknown trip link stops the retry loop rather than
+  // pinging every 30s forever). Declaring it after sendPing worked at
+  // runtime (by the time the geolocation callback actually fires, this
+  // whole function body has already run once and stopLoop exists) but
+  // react-hooks/immutability flags the reference-before-declaration
+  // shape regardless, since it can't statically prove that.
+  const stopLoop = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
 
   const sendPing = useCallback(() => {
     if (!parsed) return;
@@ -87,13 +109,6 @@ export default function DriverView({ tripToken }: { tripToken: string }) {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parsed]);
-
-  const stopLoop = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
 
   const handleStart = () => {
     if (!parsed || phase === "pinging") return;

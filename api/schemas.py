@@ -7,8 +7,13 @@ from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    # Bounded so an unauthenticated caller can't force arbitrarily large
+    # request bodies (or arbitrarily expensive bcrypt input) through the
+    # one endpoint that accepts traffic before any auth check. 254 is the
+    # RFC 5321 maximum email length; the password cap is well above any
+    # real passphrase but far below a useful abuse payload.
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=1024)
 
 
 class LoginResponse(BaseModel):
@@ -58,7 +63,28 @@ class KpiOut(BaseModel):
 
 
 class EventCreate(BaseModel):
-    kind: Literal["maintenance", "lab_sample", "note", "alarm_ack"]
+    # Mirrors the operator_events_kind_check constraint (migration
+    # 0006_ml_ground_truth). The specific kinds below exist because these
+    # rows are ML ground truth: a model cannot learn that a step change in
+    # solvent chemistry was a KOH top-up rather than an anomaly unless the
+    # human action is a *label*, not prose in a note field. The original
+    # four generic kinds are retained for historical rows.
+    kind: Literal[
+        "maintenance",
+        "lab_sample",
+        "note",
+        "alarm_ack",
+        "koh_added",
+        "tote_changeout",
+        "phe_cleaned",
+        "stator_changed",
+        "demister_cleaned",
+        "fuel_change",
+        "boiler_trip",
+        "emergency_trip",
+        "sensor_calibration",
+        "purge_cycle",
+    ]
     payload: dict[str, Any] = Field(default_factory=dict)
 
 

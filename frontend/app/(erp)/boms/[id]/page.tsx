@@ -7,6 +7,7 @@ import {
   addBomItem, deleteBomItem, getBom, listMaterials, releaseBom, reviseBom, updateBomItem, weightPreview, ErpApiError,
 } from "@/lib/erp/api";
 import type { Bom, BomShape, Material, WeightPreview as WeightPreviewT } from "@/lib/erp/types";
+import ChangeRequestsPanel from "./ChangeRequestsPanel";
 
 const SHAPE_FIELDS: Record<BomShape, { key: string; label: string }[]> = {
   plate: [
@@ -63,25 +64,45 @@ function useDebouncedPreview(form: ItemFormState) {
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
-    if (!form.material_id) { setPreview(null); return; }
-    const dimsNumeric: Record<string, number> = {};
-    let allFilled = true;
-    for (const f of SHAPE_FIELDS[form.shape]) {
-      const v = form.dims[f.key];
-      if (v === undefined || v === "") { allFilled = false; break; }
-      dimsNumeric[f.key] = Number(v);
+
+    // Every path below runs through the same setTimeout, including the
+    // "clear the preview" cases (delay 0) - not just the debounced fetch.
+    // A setState call directly in the effect body (the old early-return
+    // shape) is a synchronous state update reachable from the effect,
+    // which react-hooks/set-state-in-effect flags for good reason: it
+    // can cascade an extra render. Routing every update through the
+    // timer, even a same-tick one, keeps this effect's body doing only
+    // one thing - scheduling work - which is what the rule wants.
+    let run: () => void;
+    let delay = 300;
+
+    if (!form.material_id) {
+      run = () => setPreview(null);
+      delay = 0;
+    } else {
+      const dimsNumeric: Record<string, number> = {};
+      let allFilled = true;
+      for (const f of SHAPE_FIELDS[form.shape]) {
+        const v = form.dims[f.key];
+        if (v === undefined || v === "") { allFilled = false; break; }
+        dimsNumeric[f.key] = Number(v);
+      }
+      if (!allFilled || !form.qty) {
+        run = () => setPreview(null);
+        delay = 0;
+      } else {
+        run = () => {
+          weightPreview({
+            material_id: form.material_id, shape: form.shape, dims: dimsNumeric,
+            qty: Number(form.qty), scrap_pct: Number(form.scrap_pct || 0),
+          })
+            .then((p) => { setPreview(p); setPreviewError(null); })
+            .catch((e) => { setPreview(null); setPreviewError(e instanceof ErpApiError ? e.message : "preview failed"); });
+        };
+      }
     }
-    if (!allFilled || !form.qty) { setPreview(null); return; }
 
-    timer.current = setTimeout(() => {
-      weightPreview({
-        material_id: form.material_id, shape: form.shape, dims: dimsNumeric,
-        qty: Number(form.qty), scrap_pct: Number(form.scrap_pct || 0),
-      })
-        .then((p) => { setPreview(p); setPreviewError(null); })
-        .catch((e) => { setPreview(null); setPreviewError(e instanceof ErpApiError ? e.message : "preview failed"); });
-    }, 300);
-
+    timer.current = setTimeout(run, delay);
     return () => { if (timer.current) clearTimeout(timer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.material_id, form.shape, JSON.stringify(form.dims), form.qty, form.scrap_pct]);
@@ -102,7 +123,6 @@ export default function BomEditorPage() {
   const [showRevise, setShowRevise] = useState(false);
 
   const load = useCallback(() => {
-    setLoading(true);
     Promise.all([getBom(params.id), listMaterials()])
       .then(([b, m]) => { setBom(b); setMaterials(m); })
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load BOM"))
@@ -135,6 +155,7 @@ export default function BomEditorPage() {
       }
       setItemForm(emptyItemForm());
       setEditingItemId(null);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to save item");
@@ -157,6 +178,7 @@ export default function BomEditorPage() {
     setError(null);
     try {
       await deleteBomItem(params.id, itemId);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to delete item");
@@ -167,6 +189,7 @@ export default function BomEditorPage() {
     setError(null);
     try {
       await releaseBom(params.id);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to release BOM");
@@ -226,9 +249,19 @@ export default function BomEditorPage() {
       {error && <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">{error}</p>}
       {readOnly && (
         <p className="mb-4 rounded-lg border border-rust bg-panel px-3 py-2 text-sm text-fg">
-          This BOM is released and immutable. Use &quot;Revise&quot; above to create a new draft revision before editing items.
+          This BOM is released and immutable. Use &quot;Revise&quot; above for your own direct revision, or file a
+          formal change request below if the change needs someone else&apos;s sign-off.
         </p>
       )}
+
+      <ChangeRequestsPanel
+        bomId={params.id}
+        bomStatus={bom.status}
+        onRevised={() => {
+          setLoading(true);
+          load();
+        }}
+      />
 
       <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-2">
         <StatTile label="Total weight" value={totalWeight.toFixed(2)} unit="kg" />

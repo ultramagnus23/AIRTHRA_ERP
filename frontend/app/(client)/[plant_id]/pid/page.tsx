@@ -1,10 +1,10 @@
 import LiveView from "@/components/LiveView";
 
-// Reuses LiveView, which already renders the PidDiagram beneath the
-// sensor tiles - kept as a distinct route per the brief's "P&ID SVG
-// mimic" bullet so it's directly linkable/navigable, without
-// duplicating the WS subscription logic.
+// Reuses LiveView's WS-subscription/history-buffer logic rather than
+// duplicating it, but renders only the diagram (view="diagram") - the
+// Live tab (app/(client)/[plant_id]/page.tsx) renders the tiles+trend
+// variant instead, so the two tabs are no longer identical pages.
 export default async function PidPage({ params }: PageProps<"/[plant_id]/pid">) {
   const { plant_id } = await params;
-  return <LiveView plantId={plant_id} />;
+  return <LiveView plantId={plant_id} view="diagram" />;
 }

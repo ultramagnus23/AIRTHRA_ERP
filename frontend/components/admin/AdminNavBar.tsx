@@ -13,6 +13,7 @@ import { logout } from "@/lib/api";
 // though they share the same "Airthra." mark.
 const LEFT_TABS = [
   { href: "/fleet", label: "Fleet" },
+  { href: "/leads", label: "Leads" },
   { href: "/triage", label: "Triage" },
   { href: "/metrics", label: "Metrics" },
   { href: "/logistics", label: "Logistics" },
@@ -20,7 +21,9 @@ const LEFT_TABS = [
 const RIGHT_TABS = [
   { href: "/risk", label: "Risk" },
   { href: "/billing", label: "Billing" },
+  { href: "/offtake", label: "Offtake" },
   { href: "/mrv", label: "MRV Export" },
+  { href: "/tenants", label: "Tenants" },
 ];
 
 export default function AdminNavBar({ role }: { role: string }) {

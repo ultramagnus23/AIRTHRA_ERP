@@ -34,7 +34,6 @@ export default function JobsPage() {
   const [saving, setSaving] = useState(false);
 
   function load() {
-    setLoading(true);
     Promise.all([listFabricationJobs(), listProjects(), listBoms(), listUnitSerials()])
       .then(([j, p, b, s]) => { setJobs(j.jobs); setProjects(p); setBoms(b); setSerials(s.unit_serials); })
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load"))
@@ -50,6 +49,7 @@ export default function JobsPage() {
       await createFabricationJob({ project_id: form.project_id, bom_id: form.bom_id || null, unit_serial: form.unit_serial || null });
       setForm(emptyForm);
       setShowForm(false);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create job");
@@ -62,6 +62,7 @@ export default function JobsPage() {
     setError(null);
     try {
       await updateFabricationJobStatus(job.id, next);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to update job status");

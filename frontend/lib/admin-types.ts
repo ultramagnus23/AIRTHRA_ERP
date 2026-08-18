@@ -9,6 +9,219 @@
 // concurrent ERP/driver agents editing that file.
 import type { AlarmSeverity, AlarmState } from "./types";
 
+// DB roles (users.role's CHECK constraint) - not the JWT roles. The three
+// plant_* roles all currently decode to the same JWT role (tenant_read,
+// see api/security.py DB_ROLE_TO_JWT_ROLE) and so behave identically
+// today; the distinct DB values are kept for when that changes, and
+// exposed here for accuracy rather than collapsing them in the UI too.
+export type DbRole = "global_admin" | "global_read" | "plant_admin" | "plant_operator" | "plant_viewer";
+
+export interface AdminPlantSummary {
+  plant_id: string;
+  name: string;
+  commissioning_date: string | null;
+  sensor_count: number;
+  user_count: number;
+}
+
+export interface AdminPlantsResponse {
+  plants: AdminPlantSummary[];
+}
+
+export interface SensorInput {
+  sensor_id: string;
+  tag: string;
+  kind: string;
+  unit: string;
+  min_valid?: number | null;
+  max_valid?: number | null;
+}
+
+export interface CreatePlantInput {
+  plant_id: string;
+  name: string;
+  lat?: number | null;
+  lon?: number | null;
+  ambient_climate?: string | null;
+  boiler_capacity_tpd?: number | null;
+  fuel_type_primary?: string | null;
+  commissioning_date?: string | null;
+  timezone_display?: string;
+  sensors: SensorInput[];
+}
+
+export interface AdminUserSummary {
+  user_id: string;
+  email: string;
+  role: DbRole;
+  created_at: string;
+  plant_ids: string[];
+  invite_pending: boolean;
+}
+
+export interface AdminUsersResponse {
+  users: AdminUserSummary[];
+}
+
+export interface CreateUserInput {
+  email: string;
+  role: DbRole;
+  plant_ids: string[];
+}
+
+export interface CreateUserResult {
+  user_id: string;
+  email: string;
+  role: DbRole;
+  plant_ids: string[];
+  invite_token: string;
+  invite_expires_at: string;
+}
+
+export interface AuditLogEntry {
+  log_id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  detail: Record<string, unknown>;
+  created_at: string;
+  actor_email: string | null;
+}
+
+export interface AuditLogResponse {
+  entries: AuditLogEntry[];
+}
+
+// Mirrors migration 0009_documents's CHECK constraint - keep in sync.
+export type DocumentEntityType =
+  | "plant"
+  | "contract"
+  | "vendor"
+  | "purchase_order"
+  | "bom"
+  | "invoice"
+  | "fabrication_job"
+  | "unit_serial"
+  | "user"
+  | "company";
+
+export interface DocumentRecord {
+  document_id: string;
+  entity_type: DocumentEntityType;
+  entity_id: string;
+  filename: string;
+  content_type: string;
+  sha256: string;
+  bytes: number;
+  notes: string | null;
+  uploaded_by: string | null;
+  uploaded_by_email: string | null;
+  uploaded_at: string;
+  download_url: string;
+}
+
+export interface DocumentsResponse {
+  documents: DocumentRecord[];
+}
+
+export interface Buyer {
+  id: string;
+  name: string;
+  gstin: string | null;
+  address: string | null;
+  state_code: string | null;
+  contact: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+}
+
+export interface BuyersResponse {
+  buyers: Buyer[];
+}
+
+export interface CreateBuyerInput {
+  name: string;
+  gstin?: string | null;
+  address?: string | null;
+  state_code?: string | null;
+  contact?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  notes?: string | null;
+}
+
+export type BatchQcStatus = "pending" | "passed" | "failed";
+export type BatchStatus = "produced" | "allocated" | "dispatched";
+
+export interface ProductBatch {
+  id: string;
+  plant_id: string;
+  batch_no: string;
+  product_name: string;
+  qty_kg: number;
+  produced_at: string;
+  qc_status: BatchQcStatus;
+  qc_result: string | null;
+  qc_inspector: string | null;
+  qc_notes: string | null;
+  qc_at: string | null;
+  status: BatchStatus;
+  buyer_id: string | null;
+  rate_inr_per_kg: number | null;
+  allocated_at: string | null;
+  dispatched_at: string | null;
+  coa_sha256: string | null;
+  coa_generated_at: string | null;
+  coa_download_url: string | null;
+  created_at: string;
+}
+
+export interface BatchesResponse {
+  batches: ProductBatch[];
+}
+
+export interface CreateBatchInput {
+  plant_id: string;
+  batch_no: string;
+  product_name: string;
+  qty_kg: number;
+}
+
+export type LeadStage = "lead" | "site_assessment" | "proposal" | "contract_sent" | "won" | "lost";
+
+export interface Lead {
+  id: string;
+  company_name: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  source: string | null;
+  stage: LeadStage;
+  estimated_boiler_capacity_tpd: number | null;
+  notes: string | null;
+  lost_reason: string | null;
+  converted_plant_id: string | null;
+  assigned_to: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadsResponse {
+  leads: Lead[];
+}
+
+export interface CreateLeadInput {
+  company_name: string;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  source?: string | null;
+  estimated_boiler_capacity_tpd?: number | null;
+  notes?: string | null;
+}
+
 export type FleetColor = "green" | "yellow" | "red" | "gray";
 
 export interface FleetEntry {
@@ -124,6 +337,16 @@ export interface RiskScoresResponse {
 
 export type InvoiceStatus = "draft" | "approved" | "sent";
 
+export interface InvoiceLineItems {
+  contract_id: string;
+  base_fee_inr: number;
+  usage_rate_inr_per_kg: number;
+  usage_fee_inr: number;
+  performance_adjustment_inr: number;
+  performance_note: string | null;
+  total_inr: number;
+}
+
 export interface Invoice {
   invoice_id: string;
   plant_id: string;
@@ -134,6 +357,42 @@ export interface Invoice {
   amount: number | null;
   pdf_url: string | null;
   status: InvoiceStatus;
+  contract_id: string | null;
+  line_items: InvoiceLineItems | Record<string, never>;
+}
+
+export interface Contract {
+  contract_id: string;
+  plant_id: string;
+  status: "draft" | "active" | "ended";
+  effective_from: string;
+  effective_to: string | null;
+  base_fee_inr: number;
+  usage_rate_inr_per_kg: number;
+  performance_bonus_threshold_pct: number | null;
+  performance_bonus_inr: number;
+  performance_penalty_threshold_pct: number | null;
+  performance_penalty_inr: number;
+  revenue_share_pct: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface ContractsResponse {
+  contracts: Contract[];
+}
+
+export interface CreateContractInput {
+  plant_id: string;
+  effective_from: string;
+  base_fee_inr: number;
+  usage_rate_inr_per_kg: number;
+  performance_bonus_threshold_pct?: number | null;
+  performance_bonus_inr?: number;
+  performance_penalty_threshold_pct?: number | null;
+  performance_penalty_inr?: number;
+  revenue_share_pct?: number;
+  notes?: string | null;
 }
 
 export interface InvoicesResponse {

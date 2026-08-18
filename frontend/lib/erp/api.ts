@@ -7,6 +7,7 @@
 // 3-way match are all computed server-side. This file fetches/mutates only.
 import type {
   Bom,
+  BomChangeRequest,
   BomItem,
   BomShape,
   Drawing,
@@ -158,6 +159,20 @@ export const deleteBomItem = (bomId: string, itemId: string) => del(`/erp/boms/$
 export const releaseBom = (id: string) => post<Bom>(`/erp/boms/${id}/release`);
 export const reviseBom = (id: string, body: { new_revision: string; name?: string | null; copy_items?: boolean }) =>
   post<Bom>(`/erp/boms/${id}/revise`, body);
+
+// --- Engineering change requests (formal request/approval before a
+// released BOM is revised - additive to the direct reviseBom() above,
+// see api/routers/erp_boms.py's module docstring for when to use which) --
+export const requestBomChange = (
+  bomId: string,
+  body: { reason: string; affected_note?: string | null; requested_new_revision: string },
+) => post<BomChangeRequest>(`/erp/boms/${bomId}/change-requests`, body);
+export const listBomChangeRequests = (bomId: string) =>
+  get<{ change_requests: BomChangeRequest[] }>(`/erp/boms/change-requests?bom_id=${bomId}`);
+export const approveBomChangeRequest = (ecrId: string, note?: string) =>
+  post<{ change_request: BomChangeRequest; new_bom: Bom }>(`/erp/boms/change-requests/${ecrId}/approve`, { note });
+export const rejectBomChangeRequest = (ecrId: string, note: string) =>
+  post<BomChangeRequest>(`/erp/boms/change-requests/${ecrId}/reject`, { note });
 
 // --- POs ---------------------------------------------------------------
 export const listPos = () => get<Po[]>("/erp/pos");

@@ -12,7 +12,7 @@
 // Must be loaded with `next/dynamic(() => import("@/components/TripMap"), { ssr: false })`
 // by any server-rendered page that uses it - Leaflet touches `window` at
 // import time and has no SSR-safe path.
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -76,10 +76,6 @@ export default function TripMap({ pings, follow = true, heightClassName = "h-64"
     [pings],
   );
   const latest = sorted[sorted.length - 1];
-  const initialCenter = useRef<[number, number] | null>(null);
-  if (!initialCenter.current && latest) {
-    initialCenter.current = [latest.lat, latest.lon];
-  }
 
   if (!latest) {
     return (
@@ -96,7 +92,14 @@ export default function TripMap({ pings, follow = true, heightClassName = "h-64"
   return (
     <div className={`${heightClassName} w-full overflow-hidden rounded-2xl`}>
       <MapContainer
-        center={initialCenter.current ?? [latest.lat, latest.lon]}
+        // react-leaflet's MapContainer only reads `center` at mount -
+        // changing it on a later render does not move an already-mounted
+        // map (that's why FollowLatest above exists, using useMap() +
+        // an imperative setView() to actually re-center as new pings
+        // arrive). A ref-frozen "initial" value was therefore redundant:
+        // whatever renders here the moment this component first mounts
+        // is the only evaluation that ever matters.
+        center={[latest.lat, latest.lon]}
         zoom={15}
         scrollWheelZoom
         style={{ height: "100%", width: "100%" }}

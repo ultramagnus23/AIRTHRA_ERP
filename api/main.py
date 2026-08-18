@@ -23,9 +23,14 @@ from fastapi.middleware.cors import CORSMiddleware
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+from . import config as _config
 from . import mqtt_bridge
 from .routers import (
     admin_alarms,
+    admin_crm,
+    admin_documents,
+    admin_offtake,
+    admin_tenants,
     admin_billing,
     admin_fleet,
     admin_logistics,
@@ -73,14 +78,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Airthra P2 API", lifespan=lifespan)
 
-# Dev-only permissive CORS so the Next.js frontend (localhost:3000, a
-# different origin) can call this API and open the /ws/{plant_id}
-# WebSocket during local development. Tighten to an explicit allow-list
-# (NEXT_PUBLIC_API_BASE's origin) before this is ever deployed anywhere
-# real - wide open CORS is a dev convenience only.
+# CORS allow-list for the Next.js frontend (a different origin, so it
+# needs this to call the API and open the /ws/{plant_id} WebSocket).
+# Sourced from CORS_ALLOWED_ORIGINS - see api/config.py. Defaults to
+# localhost:3000 for a fresh checkout; a real deployment must set the env
+# var to its own frontend origin.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_config.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -118,6 +123,10 @@ app.include_router(admin_risk.router)
 app.include_router(admin_billing.router)
 app.include_router(admin_mrv.router)
 app.include_router(admin_alarms.router)
+app.include_router(admin_tenants.router)
+app.include_router(admin_documents.router)
+app.include_router(admin_offtake.router)
+app.include_router(admin_crm.router)
 
 
 @app.get("/health")
@@ -135,7 +144,5 @@ if __name__ == "__main__":
     # directly (`python -m api.main` / `python api/main.py`) ensures the
     # policy is set before uvicorn.run() creates its loop.
     import uvicorn
-
-    from . import config as _config
 
     uvicorn.run(app, host=_config.API_HOST, port=_config.API_PORT, log_level="info")

@@ -17,7 +17,6 @@ export default function MaterialsPage() {
   const [editForm, setEditForm] = useState(emptyForm);
 
   function load() {
-    setLoading(true);
     listMaterials()
       .then(setMaterials)
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load materials"))
@@ -39,6 +38,7 @@ export default function MaterialsPage() {
       });
       setForm(emptyForm);
       setShowForm(false);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create material");
@@ -69,6 +69,7 @@ export default function MaterialsPage() {
         hsn: editForm.hsn || null,
       });
       setEditId(null);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to update material");

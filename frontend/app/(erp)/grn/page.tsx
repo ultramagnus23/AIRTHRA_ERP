@@ -21,7 +21,6 @@ export default function GrnPage() {
   const [loading, setLoading] = useState(true);
 
   function load() {
-    setLoading(true);
     Promise.all([listPos(), listGrn()])
       .then(([p, g]) => { setPos(p.filter((x) => x.status === "issued" || x.status === "partial")); setGrns(g); })
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load"))
@@ -70,6 +69,7 @@ export default function GrnPage() {
       setGrnNo(""); setVehicleNo(""); setEwayBill(""); setSelectedPoId(""); setPoItems([]); setLines([]);
       setError(null);
       setSuccess(`GRN ${res.grn_no} recorded. PO status is now '${res.po_status}'.`);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create GRN");

@@ -42,6 +42,7 @@ if str(ROOT) not in sys.path:
 import aiomqtt  # noqa: E402
 
 from edge.buffer import SqliteBuffer  # noqa: E402
+from edge.clock import ClockGate  # noqa: E402
 from edge.config import EdgeConfig  # noqa: E402
 from edge.manifest import PostgresManifestSource, load_manifest  # noqa: E402
 from edge.mockgen import MockSensorSource, MockSetpointSource  # noqa: E402
@@ -65,6 +66,7 @@ class Context:
         self.cfg = cfg
         self.outbox: asyncio.Queue = asyncio.Queue()
         self.buffer = SqliteBuffer(cfg.buffer_db_path())
+        self.clock = ClockGate(cfg.clock_state_path())
         self.connected = asyncio.Event()
         self.shutdown = asyncio.Event()
         self.mqtt_client: Optional[aiomqtt.Client] = None
@@ -83,6 +85,11 @@ class Context:
         # always end up in Postgres exactly once, whether it went out live
         # or via the SQLite buffer + backfill drain.
         self.readings_generated_total: int = 0
+        # Cycles skipped because the clock could not be trusted. Non-zero
+        # here means a unit is alive but deliberately not producing data -
+        # a fundamentally different (and more urgent) condition than a
+        # unit that is simply offline, so it is surfaced separately.
+        self.readings_dropped_bad_clock: int = 0
 
     def write_stats(self) -> None:
         stats = {
@@ -90,6 +97,10 @@ class Context:
             "published_total": self.readings_published_total,
             "buffered_total": self.readings_buffered_total,
             "drained_total": self.sync_drained_total,
+            "dropped_bad_clock": self.readings_dropped_bad_clock,
+            "clock_watermark": (
+                self.clock.watermark.isoformat() if self.clock.watermark else None
+            ),
             "outbox_qsize": self.outbox.qsize(),
             "connected": self.connected.is_set(),
             "ts": datetime.now(timezone.utc).isoformat(),
@@ -120,6 +131,19 @@ async def poller_task(ctx: Context, sensor_source: MockSensorSource, setpoint_so
 
         cycle_start = time.monotonic()
         now = datetime.now(timezone.utc)
+
+        # Re-check every cycle, not just at boot: NTP can step the clock
+        # backwards at any moment, and a reading minted during that window
+        # would collide with history already written. Skipping a cycle
+        # loses one sample; emitting a mis-timestamped one corrupts the
+        # billing baseline durably.
+        clock_status = ctx.clock.check(now)
+        if not clock_status.ok:
+            log.error("poller: skipping cycle - %s", clock_status)
+            ctx.readings_dropped_bad_clock += 1
+            await asyncio.sleep(cfg.poll_interval_s)
+            continue
+        ctx.clock.observe(now)
 
         try:
             await asyncio.wait_for(_poll_once(ctx, sensor_source, setpoint_source, now), timeout=cfg.read_timeout_s * 5)
@@ -402,6 +426,31 @@ async def _watchdog_check(ctx: Context, heartbeat_path: Path) -> None:
 
 async def main_async(cfg: EdgeConfig) -> None:
     log.info("edge daemon starting: plant_id=%s mock=%s", cfg.plant_id, cfg.mock)
+
+    # Clock gate FIRST, before the manifest load and long before any
+    # reading is produced. A Pi has no battery-backed RTC: after a power
+    # cut it can boot to 1970, and because this daemon buffers to SQLite
+    # and backfills on reconnect, timestamps minted with a wrong clock are
+    # durable - they outlive the outage and get replayed into `readings`.
+    # Blocking here is the only point at which that is cheap to stop.
+    # See edge/clock.py for the three checks and the RTC hardware note.
+    clock = ClockGate(cfg.clock_state_path())
+    status = clock.check()
+    if not status.ok:
+        log.error("clock: %s", status)
+        log.error(
+            "clock: refusing to emit readings with an untrusted clock. Fit a DS3231 "
+            "I2C RTC module, or restore NTP, then restart. Waiting for the clock to "
+            "become valid rather than exiting, so the unit self-heals when 4G returns."
+        )
+    backoff = 5.0
+    while not status.ok:
+        await asyncio.sleep(backoff)
+        backoff = min(backoff * 1.5, 300.0)
+        status = clock.check()
+        if status.ok:
+            log.info("clock: recovered - %s", status)
+    log.info("clock: %s", status)
 
     source = PostgresManifestSource(cfg.database_url)
     sensors = load_manifest(cfg.plant_id, source, cfg.manifest_cache_path())

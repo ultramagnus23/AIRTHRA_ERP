@@ -18,7 +18,6 @@ export default function BomsPage() {
   const [saving, setSaving] = useState(false);
 
   function load() {
-    setLoading(true);
     Promise.all([listBoms(), listProjects(), listDrawings()])
       .then(([b, p, d]) => { setBoms(b); setProjects(p); setDrawings(d); })
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load"))

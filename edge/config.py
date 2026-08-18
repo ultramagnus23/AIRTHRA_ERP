@@ -67,6 +67,12 @@ class EdgeConfig:
     def stats_path(self) -> Path:
         return self.data_dir / f"stats_{self.plant_id}.json"
 
+    def clock_state_path(self) -> Path:
+        """Monotonic clock watermark - see edge/clock.py. Lives in data_dir
+        (the persistent SSD) alongside the buffer, deliberately NOT in
+        cache_dir: losing it silently disables regression protection."""
+        return self.data_dir / f"clock_{self.plant_id}.json"
+
     def stop_request_path(self) -> Path:
         """Filesystem-based graceful-stop trigger. Windows subprocess
         signaling (SIGTERM/CTRL_BREAK) is unreliable to deliver cleanly into

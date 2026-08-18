@@ -122,6 +122,21 @@ export interface Bom {
   items?: BomItem[];
 }
 
+export interface BomChangeRequest {
+  id: string;
+  bom_id: string;
+  reason: string;
+  affected_note: string | null;
+  requested_new_revision: string;
+  status: "pending" | "approved" | "rejected";
+  requested_by: string | null;
+  requested_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  resulting_bom_id: string | null;
+}
+
 export interface WeightPreview {
   unit_weight_kg: number;
   total_weight_kg: number;

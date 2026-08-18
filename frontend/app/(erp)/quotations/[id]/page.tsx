@@ -17,7 +17,6 @@ export default function QuotationDetailPage() {
   const [saving, setSaving] = useState(false);
 
   function load() {
-    setLoading(true);
     getQuotation(params.id)
       .then(setQuotation)
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load quotation"))
@@ -34,6 +33,7 @@ export default function QuotationDetailPage() {
         description: lineForm.description, qty: Number(lineForm.qty), unit: lineForm.unit, rate: Number(lineForm.rate),
       });
       setLineForm(emptyLine);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to add line");
@@ -46,6 +46,7 @@ export default function QuotationDetailPage() {
     setError(null);
     try {
       await deleteQuotationLine(params.id, lineId);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to delete line");

@@ -54,6 +54,7 @@ used if unset (same convention as the DB role dev passwords in .env.example).
 from __future__ import annotations
 
 import os
+import secrets
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -202,7 +203,12 @@ async def logistics_task_webhook(
     body: _GrafanaWebhookPayload,
     x_webhook_secret: str | None = Header(default=None),
 ):
-    if x_webhook_secret != GRAFANA_WEBHOOK_SECRET:
+    # compare_digest, not ==: a plain string compare short-circuits on the
+    # first differing byte, leaking the secret's prefix through response
+    # timing to anyone who can call this endpoint repeatedly.
+    if x_webhook_secret is None or not secrets.compare_digest(
+        x_webhook_secret, GRAFANA_WEBHOOK_SECRET or ""
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="missing or invalid X-Webhook-Secret",

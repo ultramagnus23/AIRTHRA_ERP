@@ -80,23 +80,40 @@ def _worst_flag(flags: list[str]) -> str:
     return max(flags, key=lambda f: _FLAG_RANK.get(f, 3))
 
 
-def _latest_reading(conn: Connection, plant_id: str, sensor_id: str, now: datetime):
-    row = conn.execute(
+def load_latest_readings(conn: Connection, plant_ids: list[str]) -> dict[tuple[str, str], dict]:
+    """Newest reading per (plant, sensor) for the whole fleet, in ONE query.
+
+    Previously this was a per-sensor query inside compute_for_plant, i.e.
+    plants x sensors round trips per cycle - ~700 at 100 plants. DISTINCT
+    ON is Postgres's native "latest row per group" and lets this stay a
+    single query regardless of fleet size. Same change as
+    workers/alarm_engine.py's FleetSnapshot, for the same reason.
+    """
+    if not plant_ids:
+        return {}
+    rows = conn.execute(
         text(
             """
-            SELECT ts, value, quality_flag
+            SELECT DISTINCT ON (plant_id, sensor_id)
+                   plant_id, sensor_id, ts, value, quality_flag
             FROM readings
-            WHERE plant_id = :plant_id AND sensor_id = :sensor_id
-            ORDER BY ts DESC
-            LIMIT 1
+            WHERE plant_id = ANY(:p)
+            ORDER BY plant_id, sensor_id, ts DESC
             """
         ),
-        {"plant_id": plant_id, "sensor_id": sensor_id},
-    ).mappings().first()
+        {"p": plant_ids},
+    ).mappings()
+    return {(r["plant_id"], r["sensor_id"]): dict(r) for r in rows}
+
+
+def _latest_reading(latest: dict, plant_id: str, sensor_id: str, now: datetime):
+    """Freshness gate against the pre-loaded snapshot. A reading older than
+    FRESHNESS_WINDOW_S is treated as absent rather than used - a stale
+    value must never silently become a current KPI."""
+    row = latest.get((plant_id, sensor_id))
     if row is None:
         return None
-    age_s = (now - row["ts"]).total_seconds()
-    if age_s > FRESHNESS_WINDOW_S:
+    if (now - row["ts"]).total_seconds() > FRESHNESS_WINDOW_S:
         return None
     return row
 
@@ -116,21 +133,21 @@ def _upsert_kpi(conn: Connection, ts: datetime, plant_id: str, kpi_name: str, va
     )
 
 
-def compute_for_plant(conn: Connection, plant_id: str) -> list[str]:
+def compute_for_plant(conn: Connection, plant_id: str, latest: dict) -> list[str]:
     """Returns list of kpi_names actually written this cycle (for logging)."""
     written: list[str] = []
     now = datetime.now(timezone.utc)
 
-    so2_in = _latest_reading(conn, plant_id, "SO2_in", now)
-    so2_out = _latest_reading(conn, plant_id, "SO2_out", now)
+    so2_in = _latest_reading(latest, plant_id, "SO2_in", now)
+    so2_out = _latest_reading(latest, plant_id, "SO2_out", now)
     if so2_in is not None and so2_out is not None and so2_in["value"] not in (None, 0):
         efficiency = (so2_in["value"] - so2_out["value"]) / so2_in["value"] * 100.0
         flag = _worst_flag([so2_in["quality_flag"], so2_out["quality_flag"]])
         _upsert_kpi(conn, now, plant_id, "so2_removal_efficiency", efficiency, flag)
         written.append("so2_removal_efficiency")
 
-    koh = _latest_reading(conn, plant_id, "level_KOH_tank", now)
-    k2so3 = _latest_reading(conn, plant_id, "level_K2SO3_tank", now)
+    koh = _latest_reading(latest, plant_id, "level_KOH_tank", now)
+    k2so3 = _latest_reading(latest, plant_id, "level_K2SO3_tank", now)
     if koh is not None and k2so3 is not None and koh["value"] is not None and k2so3["value"] is not None:
         consumed_koh_pct = 100.0 - koh["value"]
         produced_k2so3_pct = k2so3["value"]
@@ -145,11 +162,13 @@ def compute_for_plant(conn: Connection, plant_id: str) -> list[str]:
 def run_once(engine) -> None:
     with engine.begin() as conn:
         plant_ids = [r[0] for r in conn.execute(text("SELECT plant_id FROM plants ORDER BY plant_id")).fetchall()]
+        # One fleet-wide read per cycle instead of one per (plant, sensor).
+        latest = load_latest_readings(conn, plant_ids)
 
     for plant_id in plant_ids:
         try:
             with engine.begin() as conn:
-                written = compute_for_plant(conn, plant_id)
+                written = compute_for_plant(conn, plant_id, latest)
             if written:
                 print(f"[kpi_worker] {plant_id}: wrote {', '.join(written)}")
         except Exception as exc:  # never let one plant's failure kill the loop
