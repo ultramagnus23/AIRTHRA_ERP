@@ -1,0 +1,10 @@
+# Render can run any Docker image as a private service, but its Blueprint
+# spec doesn't support mounting repo files into an off-the-shelf image the
+# way docker-compose's `volumes:` does locally - so this bakes the config
+# and dev-only device credentials into the image at build time instead.
+# The passwd file's credentials are the same "change_me_dev_only"
+# convention already documented throughout .env.example - not a new
+# secret, just packaged differently for a platform that needs it baked in.
+FROM eclipse-mosquitto:latest
+COPY mosquitto.render.conf /mosquitto/config/mosquitto.conf
+COPY passwd /mosquitto/config/passwd

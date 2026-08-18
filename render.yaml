@@ -1,0 +1,211 @@
+# Render Blueprint - deploys the full backend stack (Postgres/TimescaleDB,
+# MinIO, Mosquitto, the FastAPI API, and the workers that make the
+# dashboard actually show live data) from one file.
+#
+# HONESTY NOTE, read before trusting this file blindly: this was written
+# without a Render account to test against - there was no way to verify
+# it end-to-end before handing it to you. Render's Blueprint schema is
+# followed carefully here, but treat first deploy as "probably needs one
+# or two rounds of fixing a typo'd key or a service that failed to start,"
+# not "guaranteed to work first try." DEPLOYMENT.md has the verification
+# steps for exactly that reason.
+#
+# WHY NOT RENDER'S MANAGED POSTGRES: it doesn't support the TimescaleDB
+# extension (not on their allow-list), and this schema genuinely needs it
+# - hypertables, compression, continuous aggregates, all real DDL in
+# migrations/versions/0001_initial_schema.py, not optional. Postgres here
+# is instead a private service running the exact same
+# timescale/timescaledb:latest-pg16 image docker-compose.yml and CI both
+# already use, so this isn't an untested substitute - it is the same
+# database this whole project has run against all along.
+#
+# COST NOTE: every service below is an always-on Render instance. This is
+# NOT free-tier-shaped (Render's free tier doesn't support persistent
+# disks or always-on private services at the count this needs). Expect a
+# real, ongoing dollar cost for as long as this stays deployed - sized and
+# confirmed with you before this file is ever applied for real.
+
+services:
+  # ---------------------------------------------------------------------
+  # Data layer
+  # ---------------------------------------------------------------------
+  - type: pserv
+    name: airthra-postgres
+    runtime: image
+    image:
+      url: docker.io/timescale/timescaledb:latest-pg16
+    envVars:
+      - key: POSTGRES_USER
+        value: airthra
+      - key: POSTGRES_PASSWORD
+        generateValue: true
+      - key: POSTGRES_DB
+        value: airthra
+    disk:
+      name: airthra-postgres-data
+      mountPath: /var/lib/postgresql/data
+      sizeGB: 10
+
+  - type: pserv
+    name: airthra-minio
+    runtime: image
+    image:
+      url: docker.io/minio/minio:latest
+    dockerCommand: server /data --console-address :9090
+    envVars:
+      - key: MINIO_ROOT_USER
+        value: airthra_minio
+      - key: MINIO_ROOT_PASSWORD
+        generateValue: true
+    disk:
+      name: airthra-minio-data
+      mountPath: /data
+      sizeGB: 10
+
+  - type: pserv
+    name: airthra-mosquitto
+    runtime: docker
+    dockerfilePath: ./docker/mosquitto/Dockerfile.render
+    dockerContext: ./docker/mosquitto
+
+  # ---------------------------------------------------------------------
+  # API - the one public-facing service. Everything else above and below
+  # is a Render private service, unreachable from the public internet.
+  # ---------------------------------------------------------------------
+  - type: web
+    name: airthra-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      # DATABASE_URL / ASYNC_DATABASE_URL are NOT set here - Render's
+      # Blueprint spec can't string-concatenate a DSN from another
+      # service's host + a generated password. Set these two manually
+      # after first deploy, once airthra-postgres's internal host and
+      # generated password are visible in the Render dashboard - see
+      # DEPLOYMENT.md step 4. Every other var below IS fully wired.
+      - key: PG_TENANT_ROLE
+        value: airthra_tenant
+      - key: PG_TENANT_PASSWORD
+        value: change_me_dev_only_tenant
+      - key: PG_GLOBAL_ROLE
+        value: airthra_global
+      - key: PG_GLOBAL_PASSWORD
+        value: change_me_dev_only_global
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MQTT_HOST
+        fromService:
+          type: pserv
+          name: airthra-mosquitto
+          property: host
+      - key: MQTT_DEV_PORT
+        value: "1883"
+      - key: MQTT_INGEST_USERNAME
+        value: ingest_svc
+      - key: MQTT_INGEST_PASSWORD
+        value: change_me_dev_only
+      - key: MINIO_HOST
+        fromService:
+          type: pserv
+          name: airthra-minio
+          property: host
+      - key: MINIO_PORT
+        value: "9000"
+      - key: MINIO_ROOT_USER
+        value: airthra_minio
+      - key: MINIO_ROOT_PASSWORD
+        fromService:
+          type: pserv
+          name: airthra-minio
+          envVarKey: MINIO_ROOT_PASSWORD
+      - key: MINIO_BUCKET
+        value: airthra
+      - key: APP_ENV
+        value: production
+      - key: ALLOW_SEED
+        value: "1"
+      # CORS_ALLOWED_ORIGINS: set this to your real Vercel URL once you
+      # have it (step 6) - api/main.py rejects credentialed requests from
+      # any origin not listed here, by design (see AUDIT.md 2.4).
+      - key: CORS_ALLOWED_ORIGINS
+        value: http://localhost:3000
+
+  # ---------------------------------------------------------------------
+  # Workers - background services, no public port. kpi_worker and
+  # alarm_engine are what make the Live/Triage/Billing pages show
+  # something other than frozen seed data; ingest + edge-mock are what
+  # feeds them. billing_worker/archive_worker are deliberately NOT run
+  # continuously here (see workers/*.py's own docstrings on why they're
+  # on-demand, not always-on loops) - run those manually via Render's
+  # shell when you actually want an invoice/archive generated.
+  #
+  # SHIPPING.md's own caution applies: these are singleton loops with no
+  # leader election. Never scale any of these to more than 1 instance.
+  # ---------------------------------------------------------------------
+  - type: worker
+    name: airthra-ingest
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python ingest/service.py
+    envVars:
+      - fromGroup: airthra-shared
+
+  - type: worker
+    name: airthra-edge-mock
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python edge/daemon.py --mock --plant-id goa_pilot_01
+    envVars:
+      - fromGroup: airthra-shared
+
+  - type: worker
+    name: airthra-kpi-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python workers/kpi_worker.py
+    envVars:
+      - fromGroup: airthra-shared
+
+  - type: worker
+    name: airthra-alarm-engine
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python workers/alarm_engine.py
+    envVars:
+      - fromGroup: airthra-shared
+
+envVarGroups:
+  - name: airthra-shared
+    envVars:
+      - key: PG_TENANT_ROLE
+        value: airthra_tenant
+      - key: PG_TENANT_PASSWORD
+        value: change_me_dev_only_tenant
+      - key: PG_GLOBAL_ROLE
+        value: airthra_global
+      - key: PG_GLOBAL_PASSWORD
+        value: change_me_dev_only_global
+      - key: MQTT_HOST
+        fromService:
+          type: pserv
+          name: airthra-mosquitto
+          property: host
+      - key: MQTT_DEV_PORT
+        value: "1883"
+      - key: MQTT_EDGE_USERNAME
+        value: goa_pilot_01_edge
+      - key: MQTT_EDGE_PASSWORD
+        value: change_me_dev_only
+      - key: MQTT_INGEST_USERNAME
+        value: ingest_svc
+      - key: MQTT_INGEST_PASSWORD
+        value: change_me_dev_only
+      # DATABASE_URL: same manual-paste caveat as airthra-api above -
+      # every worker needs it too, added in the dashboard after first
+      # deploy (DEPLOYMENT.md step 4 covers all services at once).
