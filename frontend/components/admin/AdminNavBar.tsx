@@ -75,12 +75,15 @@ export default function AdminNavBar({
   }
 
   return (
-    <div className="sticky top-4 z-10 mx-4">
+    // See ClientNavBar.tsx's identical fix: layer-promoting a sticky +
+    // backdrop-filter header avoids re-sampling the blur on every scroll frame.
+    <div className="sticky top-4 z-10 mx-4" style={{ willChange: "transform" }}>
       <header
         style={{
           height: "var(--nav-h)",
           background: "var(--glass-bg)",
           boxShadow: "var(--shadow-md)",
+          transform: "translateZ(0)",
         }}
         className="mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-4 rounded-full border border-hair px-6 backdrop-blur-md backdrop-saturate-150"
       >
