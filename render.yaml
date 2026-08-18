@@ -152,6 +152,11 @@ services:
     dockerCommand: python ingest/service.py
     envVars:
       - fromGroup: airthra-shared
+      - key: MQTT_HOST
+        fromService:
+          type: pserv
+          name: airthra-mosquitto
+          property: host
 
   - type: worker
     name: airthra-edge-mock
@@ -161,6 +166,11 @@ services:
     dockerCommand: python edge/daemon.py --mock --plant-id goa_pilot_01
     envVars:
       - fromGroup: airthra-shared
+      - key: MQTT_HOST
+        fromService:
+          type: pserv
+          name: airthra-mosquitto
+          property: host
 
   - type: worker
     name: airthra-kpi-worker
@@ -170,6 +180,11 @@ services:
     dockerCommand: python workers/kpi_worker.py
     envVars:
       - fromGroup: airthra-shared
+      - key: MQTT_HOST
+        fromService:
+          type: pserv
+          name: airthra-mosquitto
+          property: host
 
   - type: worker
     name: airthra-alarm-engine
@@ -179,6 +194,11 @@ services:
     dockerCommand: python workers/alarm_engine.py
     envVars:
       - fromGroup: airthra-shared
+      - key: MQTT_HOST
+        fromService:
+          type: pserv
+          name: airthra-mosquitto
+          property: host
 
 envVarGroups:
   - name: airthra-shared
@@ -191,11 +211,9 @@ envVarGroups:
         value: airthra_global
       - key: PG_GLOBAL_PASSWORD
         value: change_me_dev_only_global
-      - key: MQTT_HOST
-        fromService:
-          type: pserv
-          name: airthra-mosquitto
-          property: host
+      # MQTT_HOST is NOT here: envVarGroups only supports plain key/value
+      # pairs, not fromService cross-references. Each worker below sets
+      # MQTT_HOST individually alongside fromGroup: airthra-shared.
       - key: MQTT_DEV_PORT
         value: "1883"
       - key: MQTT_EDGE_USERNAME
