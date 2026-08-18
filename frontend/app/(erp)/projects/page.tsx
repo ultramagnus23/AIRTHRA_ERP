@@ -23,7 +23,6 @@ export default function ProjectsPage() {
   const [filterProject, setFilterProject] = useState<string>("");
 
   function load() {
-    setLoading(true);
     Promise.all([listProjects(), listTasks(), listPos()])
       .then(([p, t, po]) => {
         setProjects(p);
@@ -46,6 +45,7 @@ export default function ProjectsPage() {
       });
       setProjectForm(emptyProjectForm);
       setShowProjectForm(false);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create project");
@@ -68,6 +68,7 @@ export default function ProjectsPage() {
       });
       setTaskForm(emptyTaskForm);
       setShowTaskForm(false);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create task");
@@ -80,6 +81,7 @@ export default function ProjectsPage() {
     setError(null);
     try {
       await updateTask(t.id, { status: t.status === "done" ? "open" : "done" });
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to update task");

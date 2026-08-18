@@ -18,7 +18,86 @@ const LINE = "oklch(0.955 0.014 236 / 0.16)";
 const HAIR = "oklch(0.955 0.014 236 / 0.09)";
 const COPPER = "oklch(0.72 0.15 54)";
 const MOSS = "oklch(0.64 0.1 152)";
-const RUST = "oklch(0.52 0.16 48)";
+
+const fmt = (r?: PidReading) =>
+  r && r.value !== null && r.value !== undefined ? `${r.value.toFixed(1)} ${r.unit}` : "—";
+const isGood = (r?: PidReading) => !r || qualityInfo(r.flag).isGood;
+const fill = (r?: PidReading) => (isGood(r) ? FG : MIST);
+
+// A live sensor tag: small circular tag marker + reading, placed at its
+// real physical point on the process line. Module-scope, not defined
+// inside PidDiagram - it (and UntrackedNote below) never closed over
+// anything from that component's props/state, only the pure fmt/isGood/
+// fill helpers and module-level color constants above, so nothing here
+// needed component scope in the first place. Declaring components inside
+// a render function recreates them - and resets their identity - on
+// every render; react-hooks/static-components flags exactly this.
+function SensorTag({
+  x,
+  y,
+  tag,
+  label,
+  reading,
+  anchor = "start",
+}: {
+  x: number;
+  y: number;
+  tag: string;
+  label: string;
+  reading?: PidReading;
+  anchor?: "start" | "middle" | "end";
+}) {
+  return (
+    <g>
+      <circle cx={x} cy={y} r="9" fill="none" stroke={fill(reading)} strokeWidth="1.5" />
+      <text x={x} y={y + 3} fontSize="8" fontFamily="var(--font-mono)" textAnchor="middle" fill={fill(reading)}>
+        {tag}
+      </text>
+      <text
+        x={anchor === "end" ? x - 16 : x + 16}
+        y={y - 12}
+        fontSize="9.5"
+        fontFamily="var(--font-body)"
+        textAnchor={anchor}
+        fill={MIST}
+      >
+        {label}
+      </text>
+      <text
+        x={anchor === "end" ? x - 16 : x + 16}
+        y={y + 24}
+        fontSize="12"
+        fontWeight="600"
+        fontFamily="var(--font-mono)"
+        textAnchor={anchor}
+        fill={fill(reading)}
+      >
+        {fmt(reading)}
+      </text>
+    </g>
+  );
+}
+
+// A non-instrumented process/material annotation - explicitly dashed
+// and mist-colored so it never reads as if it were live data.
+function UntrackedNote({ x, y, lines }: { x: number; y: number; lines: string[] }) {
+  return (
+    <g>
+      {lines.map((line, i) => (
+        <text
+          key={i}
+          x={x}
+          y={y + i * 13}
+          fontSize={i === 0 ? "9.5" : "8.5"}
+          fontFamily="var(--font-mono)"
+          fill={i === 0 ? COPPER : MIST}
+        >
+          {line}
+        </text>
+      ))}
+    </g>
+  );
+}
 
 /**
  * Full-process FGD schematic (a real P&ID stand-in, per client request):
@@ -50,76 +129,6 @@ export default function PidDiagram({
   k2so3Level?: PidReading;
   flow?: PidReading;
 }) {
-  const fmt = (r?: PidReading) =>
-    r && r.value !== null && r.value !== undefined ? `${r.value.toFixed(1)} ${r.unit}` : "—";
-  const isGood = (r?: PidReading) => !r || qualityInfo(r.flag).isGood;
-  const fill = (r?: PidReading) => (isGood(r) ? FG : MIST);
-
-  // A live sensor tag: small circular tag marker + reading, placed at its
-  // real physical point on the process line.
-  const SensorTag = ({
-    x,
-    y,
-    tag,
-    label,
-    reading,
-    anchor = "start",
-  }: {
-    x: number;
-    y: number;
-    tag: string;
-    label: string;
-    reading?: PidReading;
-    anchor?: "start" | "middle" | "end";
-  }) => (
-    <g>
-      <circle cx={x} cy={y} r="9" fill="none" stroke={fill(reading)} strokeWidth="1.5" />
-      <text x={x} y={y + 3} fontSize="8" fontFamily="var(--font-mono)" textAnchor="middle" fill={fill(reading)}>
-        {tag}
-      </text>
-      <text
-        x={anchor === "end" ? x - 16 : x + 16}
-        y={y - 12}
-        fontSize="9.5"
-        fontFamily="var(--font-body)"
-        textAnchor={anchor}
-        fill={MIST}
-      >
-        {label}
-      </text>
-      <text
-        x={anchor === "end" ? x - 16 : x + 16}
-        y={y + 24}
-        fontSize="12"
-        fontWeight="600"
-        fontFamily="var(--font-mono)"
-        textAnchor={anchor}
-        fill={fill(reading)}
-      >
-        {fmt(reading)}
-      </text>
-    </g>
-  );
-
-  // A non-instrumented process/material annotation - explicitly dashed
-  // and mist-colored so it never reads as if it were live data.
-  const UntrackedNote = ({ x, y, lines }: { x: number; y: number; lines: string[] }) => (
-    <g>
-      {lines.map((line, i) => (
-        <text
-          key={i}
-          x={x}
-          y={y + i * 13}
-          fontSize={i === 0 ? "9.5" : "8.5"}
-          fontFamily="var(--font-mono)"
-          fill={i === 0 ? COPPER : MIST}
-        >
-          {line}
-        </text>
-      ))}
-    </g>
-  );
-
   return (
     <div className="rounded-2xl border border-hair bg-panel p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">

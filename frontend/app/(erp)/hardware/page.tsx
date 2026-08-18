@@ -37,7 +37,6 @@ export default function HardwareComponentsPage() {
   const [editForm, setEditForm] = useState<FormState>(emptyForm);
 
   function load() {
-    setLoading(true);
     listHardwareComponents()
       .then(setComponents)
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load hardware components"))
@@ -86,6 +85,7 @@ export default function HardwareComponentsPage() {
       });
       setForm(emptyForm);
       setShowForm(false);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create component");
@@ -114,6 +114,7 @@ export default function HardwareComponentsPage() {
         cost_inr: editForm.cost_inr ? Number(editForm.cost_inr) : null,
       });
       setEditId(null);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to update component");
@@ -125,6 +126,7 @@ export default function HardwareComponentsPage() {
   async function handleDelete(id: string) {
     try {
       await deleteHardwareComponent(id);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to delete component");

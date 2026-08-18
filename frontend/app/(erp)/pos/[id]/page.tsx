@@ -16,7 +16,6 @@ export default function PoDetailPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   function load() {
-    setLoading(true);
     getPo(params.id)
       .then((p) => { setPo(p); return getVendor(p.vendor_id); })
       .then(setVendor)
@@ -29,6 +28,7 @@ export default function PoDetailPage() {
     setError(null);
     try {
       await issuePo(params.id);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to issue PO");

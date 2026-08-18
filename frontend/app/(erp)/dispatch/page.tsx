@@ -26,7 +26,6 @@ export default function LogisticsPage() {
   const [lastTrip, setLastTrip] = useState<Trip | null>(null);
 
   function load() {
-    setLoading(true);
     listTrips()
       .then((t) => setTrips(t.trips))
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load trips"))
@@ -47,6 +46,7 @@ export default function LogisticsPage() {
       });
       setLastTrip(trip);
       setForm(emptyForm);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create trip");

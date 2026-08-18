@@ -22,7 +22,6 @@ export default function DrawingsPage() {
   const [editTitle, setEditTitle] = useState("");
 
   function load() {
-    setLoading(true);
     Promise.all([listDrawings(), listProjects()])
       .then(([d, p]) => { setDrawings(d); setProjects(p); })
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load"))
@@ -38,6 +37,7 @@ export default function DrawingsPage() {
       await createDrawing({ project_id: form.project_id, dwg_no: form.dwg_no, title: form.title || null, revision: form.revision || null });
       setForm(emptyForm);
       setShowForm(false);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create drawing");
@@ -50,6 +50,7 @@ export default function DrawingsPage() {
     setError(null);
     try {
       await releaseDrawing(id);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to release drawing");
@@ -62,6 +63,7 @@ export default function DrawingsPage() {
     try {
       await reviseDrawing(id, { new_revision: reviseRev });
       setReviseId(null);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to revise drawing");
@@ -76,6 +78,7 @@ export default function DrawingsPage() {
     try {
       await updateDrawing(id, { title: editTitle });
       setEditId(null);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to update drawing (it may be released - use Revise instead)");

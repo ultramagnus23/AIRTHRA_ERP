@@ -19,7 +19,6 @@ export default function InventoryPage() {
   const [saving, setSaving] = useState(false);
 
   function load() {
-    setLoading(true);
     Promise.all([listInventoryLots(), listMaterials(), listGrn()])
       .then(([l, m, g]) => { setLots(l.lots); setMaterials(m); setGrns(g); })
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load"))
@@ -50,6 +49,7 @@ export default function InventoryPage() {
       setForm(emptyForm);
       setSelectedGrn(null);
       setShowForm(false);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create lot");

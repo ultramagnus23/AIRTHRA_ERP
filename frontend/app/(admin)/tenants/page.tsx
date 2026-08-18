@@ -60,7 +60,9 @@ export default function TenantsPage() {
   }
 
   useEffect(() => {
-    void refresh();
+    void (async () => {
+      await refresh();
+    })();
   }, []);
 
   return (

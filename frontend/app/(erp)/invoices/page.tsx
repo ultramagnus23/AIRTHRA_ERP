@@ -18,7 +18,6 @@ export default function InvoicesPage() {
   const [saving, setSaving] = useState(false);
 
   function load() {
-    setLoading(true);
     Promise.all([listInvoices(), listVendors(), listPos()])
       .then(([i, v, p]) => { setInvoices(i); setVendors(v); setPos(p); })
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load"))
@@ -37,6 +36,7 @@ export default function InvoicesPage() {
       });
       setForm(emptyForm);
       setShowForm(false);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create invoice");

@@ -27,7 +27,6 @@ export default function VendorsPage() {
   const [editForm, setEditForm] = useState(emptyForm);
 
   function load() {
-    setLoading(true);
     listVendors()
       .then(setVendors)
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load vendors"))
@@ -55,6 +54,7 @@ export default function VendorsPage() {
       });
       setForm(emptyForm);
       setShowForm(false);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create vendor");
@@ -89,6 +89,7 @@ export default function VendorsPage() {
         notes: editForm.notes || null,
       });
       setEditId(null);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to update vendor");

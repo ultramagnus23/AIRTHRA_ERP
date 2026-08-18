@@ -17,7 +17,6 @@ export default function InvoiceDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   function load() {
-    setLoading(true);
     getInvoice(params.id)
       .then(async (inv) => {
         setInvoice(inv);

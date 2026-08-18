@@ -17,7 +17,6 @@ export default function QuotationsPage() {
   const [saving, setSaving] = useState(false);
 
   function load() {
-    setLoading(true);
     Promise.all([listQuotations(), listProjects()])
       .then(([q, p]) => { setQuotations(q); setProjects(p); })
       .catch((e) => setError(e instanceof ErpApiError ? e.message : "failed to load"))
@@ -40,6 +39,7 @@ export default function QuotationsPage() {
       });
       setForm(emptyForm);
       setShowForm(false);
+      setLoading(true);
       load();
     } catch (e) {
       setError(e instanceof ErpApiError ? e.message : "failed to create quotation");

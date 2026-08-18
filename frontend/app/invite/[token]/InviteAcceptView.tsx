@@ -79,7 +79,7 @@ export default function InviteAcceptView({ token }: { token: string }) {
           style={{ boxShadow: "var(--shadow-md)" }}
         >
           <div>
-            <p className="text-sm text-mist">You're setting up access as</p>
+            <p className="text-sm text-mist">You&apos;re setting up access as</p>
             <p className="font-mono text-sm text-fg">{invite.email}</p>
             <p className="font-mono text-xs text-copper">{invite.role}</p>
           </div>
