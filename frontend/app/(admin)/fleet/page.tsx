@@ -1,18 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { getFleet, AdminApiError } from "@/lib/admin-api";
 import type { FleetEntry, FleetResponse } from "@/lib/admin-types";
 
-// Fleet map (PRD §5.5 "Admin"): a color-coded table/list view, not a
-// real Leaflet/OSM map - documented deviation. react-leaflet isn't in
-// package.json and pulling it in (plus tile-provider wiring, plant
-// lat/lon isn't returned by GET /admin/fleet today) was judged not
-// worth the added dependency/time for a first cut when the PRD itself
-// calls a clean color-coded table an acceptable substitute. The health
+// Leaflet touches `window` at import time - no SSR-safe path, same
+// constraint TripMap.tsx documents. GET /admin/fleet now also returns
+// each plant's lat/lon/capacity/commissioning_date (added alongside this
+// map), closing the "not a real map" deviation this file used to
+// document.
+const FleetMap = dynamic(() => import("@/components/FleetMap"), { ssr: false });
+
+// Fleet health: color-coded table, plus a real map above it. The health
 // colors/thresholds are exactly GET /admin/fleet's payload, rendered
-// with zero client-side recomputation.
+// with zero client-side recomputation - the map only ever positions and
+// colors a marker from that same payload, it never derives status itself.
 // Fleet status colors mapped onto the Airthra semantic tokens: green (ok)
 // = moss, yellow (degraded) = copper, red (critical) = rust, gray
 // (unknown/offline) = mist. Always paired with the text label, never
@@ -70,8 +74,7 @@ export default function FleetPage() {
       <div>
         <h1 className="font-display text-2xl font-light text-fg">Fleet health</h1>
         <p className="text-sm text-mist">
-          Cross-plant status, computed server-side by GET /admin/fleet. Table view (see note in
-          source) in place of a live map.
+          Cross-plant status, computed server-side by GET /admin/fleet. Hover a marker for details.
         </p>
       </div>
 
@@ -80,6 +83,8 @@ export default function FleetPage() {
 
       {data && (
         <>
+          <FleetMap fleet={data.fleet} />
+
           <div
             className="rounded-2xl border border-hair bg-panel p-3 font-mono text-xs text-mist"
             style={{ boxShadow: "var(--shadow-sm)" }}

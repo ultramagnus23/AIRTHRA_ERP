@@ -7,6 +7,7 @@ import {
   listAdminUsers,
   createUser,
   reinviteUser,
+  patchUser,
   getAuditLog,
   AdminApiError,
 } from "@/lib/admin-api";
@@ -17,7 +18,10 @@ import type {
   DbRole,
   SensorInput,
 } from "@/lib/admin-types";
+import type { Department } from "@/lib/types";
 import DocumentsPanel from "@/components/admin/DocumentsPanel";
+
+const DEPARTMENTS: Department[] = ["finance", "procurement", "engineering", "sales", "logistics"];
 
 // Tenant onboarding: the real replacement for "run seed/seed.py by hand
 // against production" (see SHIPPING.md 0.2). Every mutation here writes
@@ -29,12 +33,13 @@ import DocumentsPanel from "@/components/admin/DocumentsPanel";
 // hash), so this page is the only place it's ever visible. Copy it now
 // or use "Re-invite" later, which issues a fresh one.
 
-const DB_ROLES: { value: DbRole; label: string; isPlantRole: boolean }[] = [
-  { value: "plant_operator", label: "Plant operator", isPlantRole: true },
-  { value: "plant_viewer", label: "Plant viewer", isPlantRole: true },
-  { value: "plant_admin", label: "Plant admin", isPlantRole: true },
-  { value: "global_read", label: "Airthra staff (read-only)", isPlantRole: false },
-  { value: "global_admin", label: "Airthra staff (admin)", isPlantRole: false },
+const DB_ROLES: { value: DbRole; label: string; isPlantRole: boolean; isDeptRole: boolean }[] = [
+  { value: "plant_operator", label: "Plant operator", isPlantRole: true, isDeptRole: false },
+  { value: "plant_viewer", label: "Plant viewer", isPlantRole: true, isDeptRole: false },
+  { value: "plant_admin", label: "Plant admin", isPlantRole: true, isDeptRole: false },
+  { value: "dept_user", label: "Department login", isPlantRole: false, isDeptRole: true },
+  { value: "global_read", label: "Airthra staff (read-only)", isPlantRole: false, isDeptRole: false },
+  { value: "global_admin", label: "Airthra staff (admin)", isPlantRole: false, isDeptRole: false },
 ];
 
 function fmtTs(ts: string) {
@@ -353,12 +358,14 @@ function NewUserSection({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<DbRole>("plant_operator");
   const [plantIds, setPlantIds] = useState<string[]>([]);
+  const [department, setDepartment] = useState<Department>("finance");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<{ email: string; url: string } | null>(null);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
   const isPlantRole = DB_ROLES.find((r) => r.value === role)?.isPlantRole ?? false;
+  const isDeptRole = DB_ROLES.find((r) => r.value === role)?.isDeptRole ?? false;
 
   function toOrigin(token: string) {
     return `${window.location.origin}/invite/${token}`;
@@ -373,6 +380,7 @@ function NewUserSection({
         email: email.trim(),
         role,
         plant_ids: isPlantRole ? plantIds : [],
+        department: isDeptRole ? department : null,
       });
       setInviteLink({ email: res.email, url: toOrigin(res.invite_token) });
       setEmail("");
@@ -393,6 +401,21 @@ function NewUserSection({
       onCreated();
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : "failed to re-invite");
+    }
+  }
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [toggleBusyId, setToggleBusyId] = useState<string | null>(null);
+
+  async function handleToggleActive(u: AdminUserSummary) {
+    setToggleBusyId(u.user_id);
+    try {
+      await patchUser(u.user_id, { is_active: !u.is_active });
+      onCreated();
+    } catch (err) {
+      setError(err instanceof AdminApiError ? err.message : "failed to update user");
+    } finally {
+      setToggleBusyId(null);
     }
   }
 
@@ -448,47 +471,90 @@ function NewUserSection({
       )}
 
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[560px] text-left text-sm">
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="border-b border-hair font-mono text-xs tracking-[0.1em] text-mist uppercase">
             <tr>
               <th className="px-2 py-2">Email</th>
               <th className="px-2 py-2">Role</th>
-              <th className="px-2 py-2">Plants</th>
+              <th className="px-2 py-2">Scope</th>
               <th className="px-2 py-2">Status</th>
               <th className="px-2 py-2" />
             </tr>
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.user_id} className="border-b border-hair last:border-0">
-                <td className="px-2 py-2 font-mono text-xs text-fg">{u.email}</td>
-                <td className="px-2 py-2 text-fg">{u.role}</td>
-                <td className="px-2 py-2 font-mono text-xs text-mist">
-                  {u.plant_ids.length > 0 ? u.plant_ids.join(", ") : "—"}
-                </td>
-                <td className="px-2 py-2">
-                  {u.invite_pending ? (
-                    <span className="rounded-md border border-copper/40 bg-copper/10 px-2 py-0.5 font-mono text-xs text-copper">
-                      invite pending
-                    </span>
-                  ) : (
-                    <span className="rounded-md border border-moss/40 bg-moss/10 px-2 py-0.5 font-mono text-xs text-moss">
-                      active
-                    </span>
-                  )}
-                </td>
-                <td className="px-2 py-2">
-                  {u.invite_pending && (
-                    <button
-                      type="button"
-                      onClick={() => handleReinvite(u.user_id, u.email)}
-                      className="text-xs text-copper hover:text-fg"
-                    >
-                      Re-invite
-                    </button>
-                  )}
-                </td>
-              </tr>
+              <Fragment key={u.user_id}>
+                <tr className="border-b border-hair last:border-0">
+                  <td className="px-2 py-2 font-mono text-xs text-fg">{u.email}</td>
+                  <td className="px-2 py-2 text-fg">{u.role}</td>
+                  <td className="px-2 py-2 font-mono text-xs text-mist">
+                    {u.role === "dept_user"
+                      ? (u.department ?? "—")
+                      : u.plant_ids.length > 0
+                        ? u.plant_ids.join(", ")
+                        : "—"}
+                  </td>
+                  <td className="px-2 py-2">
+                    {!u.is_active ? (
+                      <span className="rounded-md border border-rust/40 bg-rust/10 px-2 py-0.5 font-mono text-xs text-rust">
+                        deactivated
+                      </span>
+                    ) : u.invite_pending ? (
+                      <span className="rounded-md border border-copper/40 bg-copper/10 px-2 py-0.5 font-mono text-xs text-copper">
+                        invite pending
+                      </span>
+                    ) : (
+                      <span className="rounded-md border border-moss/40 bg-moss/10 px-2 py-0.5 font-mono text-xs text-moss">
+                        active
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-2 py-2">
+                    <div className="flex items-center gap-3">
+                      {u.invite_pending && (
+                        <button
+                          type="button"
+                          onClick={() => handleReinvite(u.user_id, u.email)}
+                          className="text-xs text-copper hover:text-fg"
+                        >
+                          Re-invite
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setEditingId((id) => (id === u.user_id ? null : u.user_id))}
+                        className="text-xs text-mist hover:text-fg"
+                      >
+                        {editingId === u.user_id ? "Cancel" : "Edit"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(u)}
+                        disabled={toggleBusyId === u.user_id}
+                        className="text-xs text-mist hover:text-fg disabled:opacity-40"
+                      >
+                        {u.is_active ? "Deactivate" : "Reactivate"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {editingId === u.user_id && (
+                  <tr className="border-b border-hair last:border-0">
+                    <td colSpan={5} className="px-2 pb-3">
+                      <EditUserRow
+                        user={u}
+                        plants={plants}
+                        onDone={() => {
+                          setEditingId(null);
+                          onCreated();
+                        }}
+                        onCancel={() => setEditingId(null)}
+                        onError={setError}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
             {users.length === 0 && (
               <tr>
@@ -567,6 +633,22 @@ function NewUserSection({
             </Field>
           )}
 
+          {isDeptRole && (
+            <Field label="Department — the only pages this login will see">
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value as Department)}
+                className="rounded-lg border border-line bg-transparent px-2.5 py-1.5 text-sm text-fg focus:border-copper focus:outline-none"
+              >
+                {DEPARTMENTS.map((d) => (
+                  <option key={d} value={d} className="bg-panel">
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
           <div className="flex items-center gap-3">
             <button
               type="submit"
@@ -580,6 +662,125 @@ function NewUserSection({
         </form>
       )}
     </section>
+  );
+}
+
+function EditUserRow({
+  user,
+  plants,
+  onDone,
+  onCancel,
+  onError,
+}: {
+  user: AdminUserSummary;
+  plants: AdminPlantSummary[];
+  onDone: () => void;
+  onCancel: () => void;
+  onError: (msg: string) => void;
+}) {
+  const [role, setRole] = useState<DbRole>(user.role);
+  const [plantIds, setPlantIds] = useState<string[]>(user.plant_ids);
+  const [department, setDepartment] = useState<Department>(user.department ?? "finance");
+  const [busy, setBusy] = useState(false);
+
+  const isPlantRole = DB_ROLES.find((r) => r.value === role)?.isPlantRole ?? false;
+  const isDeptRole = DB_ROLES.find((r) => r.value === role)?.isDeptRole ?? false;
+
+  async function handleSave() {
+    setBusy(true);
+    try {
+      await patchUser(user.user_id, {
+        role,
+        department: isDeptRole ? department : null,
+        plant_ids: isPlantRole ? plantIds : [],
+      });
+      onDone();
+    } catch (err) {
+      onError(err instanceof AdminApiError ? err.message : "failed to update user");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="air-rise flex flex-col gap-3 rounded-xl border border-line bg-midnight p-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Role">
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as DbRole)}
+            className="rounded-lg border border-line bg-transparent px-2.5 py-1.5 text-sm text-fg focus:border-copper focus:outline-none"
+          >
+            {DB_ROLES.map((r) => (
+              <option key={r.value} value={r.value} className="bg-panel">
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {isDeptRole && (
+          <Field label="Department">
+            <select
+              value={department}
+              onChange={(e) => setDepartment(e.target.value as Department)}
+              className="rounded-lg border border-line bg-transparent px-2.5 py-1.5 text-sm text-fg focus:border-copper focus:outline-none"
+            >
+              {DEPARTMENTS.map((d) => (
+                <option key={d} value={d} className="bg-panel">
+                  {d}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+      </div>
+
+      {isPlantRole && (
+        <Field label="Plants this user can access">
+          <div className="flex flex-wrap gap-2">
+            {plants.map((p) => {
+              const checked = plantIds.includes(p.plant_id);
+              return (
+                <label
+                  key={p.plant_id}
+                  className={`cursor-pointer rounded-full border px-3 py-1 font-mono text-xs ${
+                    checked ? "border-copper bg-copper/10 text-copper" : "border-line text-mist"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) =>
+                      setPlantIds((prev) =>
+                        e.target.checked
+                          ? [...prev, p.plant_id]
+                          : prev.filter((id) => id !== p.plant_id),
+                      )
+                    }
+                    className="mr-1.5 hidden"
+                  />
+                  {p.plant_id}
+                </label>
+              );
+            })}
+          </div>
+        </Field>
+      )}
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={busy || (isPlantRole && plantIds.length === 0)}
+          className="rounded-full bg-copper px-4 py-2 text-sm font-medium text-bg disabled:opacity-40"
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button type="button" onClick={onCancel} className="text-sm text-mist hover:text-fg">
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
 

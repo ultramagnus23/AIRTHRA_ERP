@@ -62,7 +62,14 @@ async def get_fleet(
     degraded_since = now - timedelta(seconds=DEGRADED_WINDOW_S)
 
     plants = (
-        await conn.execute(text("SELECT plant_id, name FROM plants ORDER BY plant_id"))
+        await conn.execute(
+            text(
+                """
+                SELECT plant_id, name, lat, lon, boiler_capacity_tpd, commissioning_date
+                FROM plants ORDER BY plant_id
+                """
+            )
+        )
     ).mappings().all()
 
     latest_readings = {
@@ -152,6 +159,10 @@ async def get_fleet(
             {
                 "plant_id": pid,
                 "name": p["name"],
+                "lat": p["lat"],
+                "lon": p["lon"],
+                "boiler_capacity_tpd": p["boiler_capacity_tpd"],
+                "commissioning_date": p["commissioning_date"],
                 "color": color,
                 "reasons": reasons,
                 "last_reading_ts": last_ts,

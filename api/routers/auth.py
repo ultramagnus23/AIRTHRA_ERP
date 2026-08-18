@@ -38,12 +38,23 @@ async def login(body: LoginRequest, request: Request) -> LoginResponse:
     async with global_engine.connect() as conn:
         row = (
             await conn.execute(
-                text("SELECT user_id, pw_hash, role, department FROM users WHERE email = :email"),
+                text("SELECT user_id, pw_hash, role, department, is_active FROM users WHERE email = :email"),
                 {"email": body.email},
             )
         ).mappings().first()
 
         if row is None or not security.verify_password(body.password, row["pw_hash"]):
+            ratelimit.record_failure(body.email)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="invalid email or password",
+            )
+        if not row["is_active"]:
+            # Deliberately the same 401 + message as a bad password, not a
+            # distinct "account disabled" response - telling an anonymous
+            # caller *why* a login failed (vs. just that it failed) is an
+            # account-enumeration/status leak for a deactivated employee's
+            # old credentials.
             ratelimit.record_failure(body.email)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

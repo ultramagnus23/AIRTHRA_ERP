@@ -197,12 +197,19 @@ export interface AlarmsResponse {
 }
 
 /** Instrument subsystems, per the FEED instrument register's own grouping. */
-export type Subsystem = "gas_path" | "absorber_loop" | "product_loop";
+export type Subsystem =
+  | "gas_path"
+  | "absorber_loop"
+  | "product_loop"
+  | "energy_recovery"
+  | "mechanical_health";
 
 export const SUBSYSTEM_LABELS: Record<Subsystem, string> = {
   gas_path: "Gas path, emissions & safety",
   absorber_loop: "Absorber & solvent loop",
   product_loop: "Product & reagent inventory",
+  energy_recovery: "Waste-heat recovery loop",
+  mechanical_health: "Pump, fan & duct condition monitoring",
 };
 
 /** Static sensor manifest - not exposed by any endpoint, mirrors seed/seed.py SENSORS.
@@ -222,18 +229,27 @@ export interface SensorMeta {
   unit: string;
   /** FEED register tag (AT-01, AE-02, ...). The identifier a field engineer reads. */
   tag: string;
-  /** Sensor hardware + signal path, per the register. */
+  /** Sensor hardware + signal path, per the register. Placeholder tags (wired: false) say so plainly rather than inventing a part number. */
   hardware: string;
   /** Physical mounting location, per the register. */
   location: string;
   /** What this instrument is diagnostically for. */
   purpose: string;
   subsystem: Subsystem;
-  /** Engineering min/max, mirrors sensors.min_valid/max_valid in seed/seed.py. Presentational only (range-bar context), not a computed value. */
-  min: number;
-  max: number;
+  /** Whether this tag has a real sensor feeding it today. false = catalogued
+   * from the FEED register (tag code is real) but not yet wired to
+   * hardware - the tile still renders, showing "--" instead of a value,
+   * per the platform's own "never fake data" rule (never omitted, never
+   * synthesized). */
+  wired: boolean;
+  /** Engineering min/max, mirrors sensors.min_valid/max_valid in seed/seed.py.
+   * Presentational only (range-bar context), not a computed value.
+   * Omitted for unwired tags where no authoritative register range has
+   * been transcribed into this codebase yet, rather than guessing one. */
+  min?: number;
+  max?: number;
   /** Sub-range considered "normal" for the bar's fill, distinct from the hard min/max. */
-  normal: [number, number];
+  normal?: [number, number];
   /** Register's alert/trip threshold, verbatim. Displayed as reference text, never evaluated here. */
   threshold: string | null;
   /** Where this platform's sensor and the FEED register don't line up. */
@@ -251,6 +267,7 @@ export const SENSOR_MANIFEST: SensorMeta[] = [
     location: "Gas inlet duct, before B-101 / E-101",
     purpose: "Raw boiler SO2 mass load entering the plant. Primary billing input.",
     subsystem: "gas_path",
+    wired: true,
     unit: "ppm",
     min: 0,
     max: 5000,
@@ -266,6 +283,7 @@ export const SENSOR_MANIFEST: SensorMeta[] = [
     location: "Clean stack exhaust duct, after T-101",
     purpose: "Continuous stack emission compliance monitoring. Proves >95% removal.",
     subsystem: "gas_path",
+    wired: true,
     unit: "ppm",
     min: 0,
     max: 500,
@@ -281,6 +299,7 @@ export const SENSOR_MANIFEST: SensorMeta[] = [
     location: "Absorber inlet gas pipe, before N1",
     purpose: "Gas cooling before the FRP tower. Protects vinyl ester resin from thermal degradation.",
     subsystem: "gas_path",
+    wired: true,
     unit: "C",
     min: -10,
     max: 200,
@@ -296,6 +315,7 @@ export const SENSOR_MANIFEST: SensorMeta[] = [
     location: "Gas inlet duct",
     purpose: "Flue gas throughput, paired with AT-01 to derive SO2 mass load.",
     subsystem: "gas_path",
+    wired: true,
     unit: "m3/h",
     min: 0,
     max: 500,
@@ -312,6 +332,7 @@ export const SENSOR_MANIFEST: SensorMeta[] = [
     location: "Cooled side-stream from the 200L MS drum",
     purpose: "Active neutralization & product quality. Guarantees stable K2SO3, prevents stack slippage.",
     subsystem: "absorber_loop",
+    wired: true,
     unit: "pH",
     min: 0,
     max: 14,
@@ -327,6 +348,7 @@ export const SENSOR_MANIFEST: SensorMeta[] = [
     location: "Top lid of the elevated KOH supply tote",
     purpose: "Raw KOH chemical inventory. Feeds automated bulk procurement.",
     subsystem: "product_loop",
+    wired: true,
     unit: "%",
     min: 0,
     max: 100,
@@ -343,6 +365,7 @@ export const SENSOR_MANIFEST: SensorMeta[] = [
     location: "Top lid of the 1000L product IBC tote",
     purpose: "Fertilizer receiver level. Prevents overfill, triggers driver dispatch.",
     subsystem: "product_loop",
+    wired: true,
     unit: "%",
     min: 0,
     max: 100,
@@ -351,10 +374,456 @@ export const SENSOR_MANIFEST: SensorMeta[] = [
     note: "Register specifies litres (50–950 L); this platform stores percent. Not converted — needs a decision.",
     accent: "moss",
   },
+
+  // ---------------------------------------------------------------------
+  // Catalogued but NOT wired: real FEED register tag codes (cited in
+  // AUDIT.md's fault-tree gap analysis and in the calculated-metrics
+  // formulas this platform's KPI worker will eventually consume), no
+  // hardware installed against them yet. hardware/location intentionally
+  // say so rather than inventing a part number or mounting point this
+  // codebase has no source for. These render as "--" tiles, never
+  // fabricated readings - see the `wired` field's own doc comment.
+  //
+  // This is NOT the full 40-tag register: it's the ~16 additional tags
+  // this codebase currently has an actual cited code and purpose for.
+  // The remaining ~17 tags need the original FEED register document
+  // (re-)supplied to transcribe honestly, the same way the 7 wired tags
+  // and these 16 were sourced - not guessed to hit a round number.
+  // ---------------------------------------------------------------------
+  {
+    sensor_id: "AT-03",
+    label: "Combustion air O2",
+    tag: "AT-03",
+    hardware: "Not yet installed",
+    location: "Boiler flue inlet, upstream of the gas cooler",
+    purpose: "Excess-air ratio (lambda) and combustion quality index for the factory-side boiler health add-on.",
+    subsystem: "gas_path",
+    wired: false,
+    unit: "%",
+    threshold: null,
+    accent: "copper",
+  },
+  {
+    sensor_id: "AT-04",
+    label: "Combustion CO",
+    tag: "AT-04",
+    hardware: "Not yet installed",
+    location: "Boiler flue inlet, alongside AT-03",
+    purpose: "Incomplete-combustion loss term for the combustion quality index; flags wet/poor-quality fuel batches.",
+    subsystem: "gas_path",
+    wired: false,
+    unit: "ppm",
+    threshold: null,
+    accent: "copper",
+  },
+  {
+    sensor_id: "TE-01B",
+    label: "Gas temp (post-cooler)",
+    tag: "TE-01B",
+    hardware: "Not yet installed",
+    location: "Gas duct, immediately after E-101, before absorber inlet",
+    purpose: "Paired with TE-01 to compute waste-heat scavenged by the gas cooler (E-101).",
+    subsystem: "energy_recovery",
+    wired: false,
+    unit: "C",
+    threshold: null,
+    accent: "copper",
+  },
+  {
+    sensor_id: "PT-02",
+    label: "Duct pressure (pre-cooler)",
+    tag: "PT-02",
+    hardware: "Not yet installed",
+    location: "Gas duct, before E-101",
+    purpose: "With PT-03, tracks duct resistance normalized by fan speed - rising trend flags ash fouling.",
+    subsystem: "energy_recovery",
+    wired: false,
+    unit: "Pa",
+    threshold: null,
+    accent: "copper",
+  },
+  {
+    sensor_id: "PT-03",
+    label: "Duct pressure (post-cooler)",
+    tag: "PT-03",
+    hardware: "Not yet installed",
+    location: "Gas duct, after E-101",
+    purpose: "Paired with PT-02 for the duct ash-fouling factor.",
+    subsystem: "energy_recovery",
+    wired: false,
+    unit: "Pa",
+    threshold: null,
+    accent: "copper",
+  },
+  {
+    sensor_id: "TE-06",
+    label: "PHE-101 hot-side outlet",
+    tag: "TE-06",
+    hardware: "Not yet installed",
+    location: "Plate heat exchanger PHE-101, hot side",
+    purpose: "With TE-09, PHE-101 thermal effectiveness - a slow drift down flags plate fouling.",
+    subsystem: "energy_recovery",
+    wired: false,
+    unit: "C",
+    threshold: null,
+    accent: "copper",
+  },
+  {
+    sensor_id: "TE-09",
+    label: "PHE-101 cold-side inlet",
+    tag: "TE-09",
+    hardware: "Not yet installed",
+    location: "Plate heat exchanger PHE-101, cold side",
+    purpose: "Paired with TE-06 for PHE-101 effectiveness.",
+    subsystem: "energy_recovery",
+    wired: false,
+    unit: "C",
+    threshold: null,
+    accent: "copper",
+  },
+  {
+    sensor_id: "TE-12",
+    label: "Venturi throat temp",
+    tag: "TE-12",
+    hardware: "Not yet installed",
+    location: "Venturi (P-103) throat outlet",
+    purpose: "Energy-balance cross-check on instantaneous SO2 -> K2SO3 neutralization, alongside AT-02 pH.",
+    subsystem: "absorber_loop",
+    wired: false,
+    unit: "C",
+    threshold: null,
+    accent: "copper",
+  },
+  {
+    sensor_id: "PT-05",
+    label: "P-101 discharge pressure",
+    tag: "PT-05",
+    hardware: "Not yet installed",
+    location: "Solvent circulation pump P-101, discharge line",
+    purpose: "With the pump's motor current, a 7-day rolling ratio gives ~2 weeks' advance warning of stator wear.",
+    subsystem: "mechanical_health",
+    wired: false,
+    unit: "bar",
+    threshold: null,
+    accent: "moss",
+  },
+  {
+    sensor_id: "VFD-P101",
+    label: "P-101 motor current",
+    tag: "VFD-P101",
+    hardware: "Not yet installed",
+    location: "P-101 VFD drive",
+    purpose: "Motor amps, denominator of the stator wear index alongside PT-05.",
+    subsystem: "mechanical_health",
+    wired: false,
+    unit: "A",
+    threshold: null,
+    accent: "moss",
+  },
+  {
+    sensor_id: "VFD-B101",
+    label: "FD fan speed/power",
+    tag: "VFD-B101",
+    hardware: "Not yet installed",
+    location: "Forced-draft fan B-101 drive",
+    purpose: "SO2 mass capture rate normalization and the boiler-side excess-air diagnostics.",
+    subsystem: "mechanical_health",
+    wired: false,
+    unit: "Hz",
+    threshold: null,
+    accent: "moss",
+  },
+  {
+    sensor_id: "PT-08",
+    label: "P-103 motive pressure",
+    tag: "PT-08",
+    hardware: "Not yet installed",
+    location: "Venturi P-103, motive water/liquor supply",
+    purpose: "With PT-01 (vacuum drawn), detects venturi nozzle wear or plugging.",
+    subsystem: "mechanical_health",
+    wired: false,
+    unit: "bar",
+    threshold: null,
+    accent: "moss",
+  },
+  {
+    sensor_id: "PT-01",
+    label: "P-103 vacuum drawn",
+    tag: "PT-01",
+    hardware: "Not yet installed",
+    location: "Venturi P-103, suction side",
+    purpose: "Paired with PT-08 for venturi motive health.",
+    subsystem: "mechanical_health",
+    wired: false,
+    unit: "bar",
+    threshold: null,
+    accent: "moss",
+  },
+  {
+    sensor_id: "DP-101",
+    label: "Absorber bed dP",
+    tag: "DP-101",
+    hardware: "Not yet installed",
+    location: "Absorber packed bed, across the packing",
+    purpose: "Column flooding margin - detects liquid holdup before solvent backs up into the gas duct.",
+    subsystem: "mechanical_health",
+    wired: false,
+    unit: "Pa",
+    threshold: null,
+    accent: "moss",
+  },
+  {
+    sensor_id: "DP-S101",
+    label: "Hydrocyclone dP",
+    tag: "DP-S101",
+    hardware: "Not yet installed",
+    location: "Hydrocyclone S-101, inlet to overflow",
+    purpose: "Ash carryover / blockage severity - detects a plugged underflow orifice dumping ash into clean solvent.",
+    subsystem: "mechanical_health",
+    wired: false,
+    unit: "Pa",
+    threshold: null,
+    accent: "moss",
+  },
+  {
+    sensor_id: "EM-01",
+    label: "Skid total power",
+    tag: "EM-01",
+    hardware: "Not yet installed",
+    location: "Skid main incomer",
+    purpose: "Specific energy consumption (kWh per kg SO2 captured) - the ESG/green-loan intensity metric.",
+    subsystem: "mechanical_health",
+    wired: false,
+    unit: "kWh",
+    threshold: null,
+    accent: "moss",
+  },
 ];
 
 /** Instrument coverage: how much of the FEED register is actually wired up.
  * Denominator is the register's full tag count across all five subsystems;
- * the numerator is SENSOR_MANIFEST. Displayed honestly on the Live page
- * rather than presenting 7 sensors as if they were the whole plant. */
+ * the numerator is WIRED_TAG_COUNT below. Displayed honestly on the Live
+ * page rather than presenting 7 sensors as if they were the whole plant. */
 export const REGISTER_TAG_COUNT = 40;
+
+/** Tags with a real sensor feeding them today. */
+export const WIRED_TAG_COUNT = SENSOR_MANIFEST.filter((s) => s.wired).length;
+
+/** Tags catalogued in this codebase at all (wired + known-but-unwired
+ * placeholders) - always <= REGISTER_TAG_COUNT. The gap between this and
+ * REGISTER_TAG_COUNT is register tags this codebase has no cited source
+ * for yet, not tags deliberately left out. */
+export const CATALOGUED_TAG_COUNT = SENSOR_MANIFEST.length;
+
+/** A derived KPI (workers/kpi_worker.py), computed server-side from real
+ * wired sensors - never in the frontend, per the platform's hard rule
+ * that business logic is never computed client-side. `kpi_name` matches
+ * exactly what the worker writes to `kpis.kpi_name`. */
+export interface ComputableMetric {
+  kpi_name: string;
+  label: string;
+  unit: string;
+  formula: string;
+  category: "process" | "energy" | "factory" | "maintenance" | "commercial";
+}
+
+/** A metric from the platform's calculated-data roadmap that is NOT yet
+ * computable: at least one required tag has no real sensor
+ * (SENSOR_MANIFEST wired: false, or not catalogued at all). Never
+ * estimated or fabricated - the Live page shows these as "awaiting
+ * instrumentation" with the exact tags still needed. */
+export interface PendingMetric {
+  label: string;
+  unit: string;
+  formula: string;
+  /** Register tag codes this metric needs that aren't wired yet. */
+  missingTags: string[];
+  category: "process" | "energy" | "factory" | "maintenance" | "commercial";
+}
+
+export const COMPUTABLE_METRICS: ComputableMetric[] = [
+  {
+    kpi_name: "so2_removal_efficiency",
+    label: "SO2 removal efficiency",
+    unit: "%",
+    formula: "(AT-01 - AE-02) / AT-01 x 100",
+    category: "process",
+  },
+  {
+    kpi_name: "mass_balance_closure",
+    label: "Mass balance closure",
+    unit: "%",
+    formula: "workers/kpi_worker.py - see source for the exact reconciliation",
+    category: "process",
+  },
+];
+
+const CATEGORY_LABELS: Record<PendingMetric["category"], string> = {
+  process: "Chemical & process performance",
+  energy: "Thermodynamics & energy scavenging",
+  factory: "Factory-side combustion intelligence",
+  maintenance: "Predictive maintenance & asset health",
+  commercial: "Commercial, ESG & carbon-credit MRV",
+};
+export { CATEGORY_LABELS };
+
+/** The rest of the client's calculated-metrics roadmap. Every formula
+ * here is real (transcribed from the spec as given); every one is marked
+ * pending because at least one input tag isn't wired yet - see each
+ * tag's own SENSOR_MANIFEST entry for what "wired" means. */
+export const PENDING_METRICS: PendingMetric[] = [
+  {
+    label: "SO2 mass capture rate",
+    unit: "kg/hr",
+    formula: "AT-01_ppm x (VFD-B101/50) x (flow/1e6) x (64.07/22.414) x (273.15/(273.15+TE-01B))",
+    missingTags: ["VFD-B101", "TE-01B"],
+    category: "process",
+  },
+  {
+    label: "DES solvent specific loading",
+    unit: "g SO2 / kg DES",
+    formula: "Mass SO2 absorbed / solvent circulation rate (P-101)",
+    missingTags: ["P-101 flow"],
+    category: "process",
+  },
+  {
+    label: "Venturi neutralization stoichiometry",
+    unit: "%",
+    formula: "Energy balance across venturi (dT = TE-12 - T_KOH) correlated with AT-02 pH",
+    missingTags: ["TE-12", "T_KOH"],
+    category: "process",
+  },
+  {
+    label: "Product concentration estimator",
+    unit: "wt% K2SO3",
+    formula: "Cumulative SO2 mass in vs. cumulative KOH addition vs. delta LE-02",
+    missingTags: ["cumulative dosing totals"],
+    category: "process",
+  },
+  {
+    label: "Flue gas waste heat scavenged",
+    unit: "kW",
+    formula: "m_gas x Cp_gas x (TE-01B - TE-01)",
+    missingTags: ["TE-01B", "gas mass flow"],
+    category: "energy",
+  },
+  {
+    label: "Stripper thermal utilization",
+    unit: "kW",
+    formula: "m_oil x Cp_oil x (T_oil,in - T_oil,out)",
+    missingTags: ["thermal oil loop instrumentation"],
+    category: "energy",
+  },
+  {
+    label: "PHE-101 exchanger effectiveness",
+    unit: "%",
+    formula: "(TE-06 - TE-05) / (TE-09 - TE-05) x 100",
+    missingTags: ["TE-05", "TE-06", "TE-09"],
+    category: "energy",
+  },
+  {
+    label: "Parasitic energy avoidance",
+    unit: "Rs/day",
+    formula: "(Q_recovered x 24h x cost of steam) - oil pump power",
+    missingTags: ["TE-01B", "oil pump power"],
+    category: "energy",
+  },
+  {
+    label: "Combustion quality index",
+    unit: "0-100",
+    formula: "100 - dry heat loss% - incomplete combustion loss%",
+    missingTags: ["AT-03", "AT-04"],
+    category: "factory",
+  },
+  {
+    label: "Excess air ratio (lambda)",
+    unit: "ratio",
+    formula: "20.9 / (20.9 - AT-03)",
+    missingTags: ["AT-03"],
+    category: "factory",
+  },
+  {
+    label: "Fuel moisture / quality anomaly",
+    unit: "flag",
+    formula: "Divergence between boiler steam output and inlet SO2/CO signature",
+    missingTags: ["AT-04", "boiler steam output feed"],
+    category: "factory",
+  },
+  {
+    label: "Estimated factory biomass consumption",
+    unit: "TPD",
+    formula: "Integrated sulfur mass in flue gas / known biomass sulfur fraction (0.5% S)",
+    missingTags: ["fuel sulfur fraction reference"],
+    category: "factory",
+  },
+  {
+    label: "Normalized stack emission intensity",
+    unit: "mg/Nm3 @ 11% O2",
+    formula: "AE-02 x ((20.9-11.0)/(20.9-AT-03)) x 2.86",
+    missingTags: ["AT-03"],
+    category: "factory",
+  },
+  {
+    label: "P-101 stator wear index",
+    unit: "0.0-1.0",
+    formula: "7-day rolling ratio of PT-05 / VFD-P101",
+    missingTags: ["PT-05", "VFD-P101"],
+    category: "maintenance",
+  },
+  {
+    label: "P-103 venturi motive health",
+    unit: "ratio",
+    formula: "PT-08 / PT-01",
+    missingTags: ["PT-08", "PT-01"],
+    category: "maintenance",
+  },
+  {
+    label: "Absorber bed flooding margin",
+    unit: "Pa",
+    formula: "Measured DP-101 vs. theoretical Ergun-equation dry-bed pressure drop",
+    missingTags: ["DP-101"],
+    category: "maintenance",
+  },
+  {
+    label: "Hydrocyclone ash blockage severity",
+    unit: "Pa",
+    formula: "DP-S101 differential, inlet to overflow",
+    missingTags: ["DP-S101"],
+    category: "maintenance",
+  },
+  {
+    label: "Duct ash fouling factor",
+    unit: "index",
+    formula: "(PT-02 - PT-03) / VFD-B101^2",
+    missingTags: ["PT-02", "PT-03", "VFD-B101"],
+    category: "maintenance",
+  },
+  {
+    label: "Monthly offtake billing total",
+    unit: "Rs",
+    formula: "integral(AT-01 - AE-02) dt x contracted rate - already the billing_worker's own path (workers/billing_worker.py), not this KPI pipeline",
+    missingTags: [],
+    category: "commercial",
+  },
+  {
+    label: "Verified fertilizer production",
+    unit: "kg",
+    formula: "Continuous integration of d(LE-02)/dt x specific gravity, cross-checked with load cells",
+    missingTags: ["load cell cross-check"],
+    category: "commercial",
+  },
+  {
+    label: "Specific energy consumption",
+    unit: "kWh/kg SO2",
+    formula: "Total skid kWh (EM-01) / total kg SO2 captured",
+    missingTags: ["EM-01"],
+    category: "commercial",
+  },
+  {
+    label: "Avoided atmospheric acid deposition",
+    unit: "kg H2SO4 eq",
+    formula: "Mass SO2 x 1.53",
+    missingTags: ["depends on SO2 mass capture rate above"],
+    category: "commercial",
+  },
+];
