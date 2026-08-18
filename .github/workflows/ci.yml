@@ -36,9 +36,18 @@ jobs:
       # lockfile have drifted, rather than silently resolving something
       # different from what was tested locally.
       - run: npm ci
+      # Build BEFORE the standalone typecheck. Next.js's typed-routes
+      # feature (PageProps/LayoutProps) only exist once `next build` (or
+      # `next dev`) has generated .next/types/ - that directory is
+      # gitignored, so a fresh checkout has none of it. Running `tsc
+      # --noEmit` first (as an earlier revision of this workflow did)
+      # fails with "Cannot find name 'PageProps'" on every dynamic route,
+      # even though the exact same command passes locally - only because
+      # a local checkout has almost always run `next build`/`next dev`
+      # at least once before, leaving those generated types on disk.
+      - run: npm run build
       - run: npx tsc --noEmit
       - run: npm run lint
-      - run: npm run build
 
   backend:
     name: Backend (gates against live Postgres)
@@ -62,10 +71,22 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://airthra:ci_only_not_a_secret@localhost:5432/airthra
       ASYNC_DATABASE_URL: postgresql+asyncpg://airthra:ci_only_not_a_secret@localhost:5432/airthra
+      # These two are NOT arbitrary CI secrets - migrations/versions/
+      # 0001_initial_schema.py hardcodes these exact literal passwords in
+      # the CREATE ROLE statement for airthra_tenant/airthra_global (the
+      # same convention as .env.example's dev-only credentials), rather
+      # than reading them from an env var at migration time. An earlier
+      # revision of this workflow invented its own values here
+      # (ci_only_tenant/ci_only_global), which meant tests/p0_gate.py -
+      # correctly reading PG_TENANT_PASSWORD/PG_GLOBAL_PASSWORD from env
+      # to connect AS that role - authenticated with a password the role
+      # was never actually created with. Verified live: this must match
+      # migration 0001's CREATE ROLE literals exactly, not be independently
+      # chosen.
       PG_TENANT_ROLE: airthra_tenant
-      PG_TENANT_PASSWORD: ci_only_tenant
+      PG_TENANT_PASSWORD: change_me_dev_only_tenant
       PG_GLOBAL_ROLE: airthra_global
-      PG_GLOBAL_PASSWORD: ci_only_global
+      PG_GLOBAL_PASSWORD: change_me_dev_only_global
       JWT_SECRET: ci_only_jwt_secret_not_used_anywhere_real
       APP_ENV: dev
     steps:
