@@ -43,6 +43,21 @@ The FEED instrument register (the full ~40-tag table with per-tag normal ranges 
 
 Two follow-ups needed: (a) retune the six seeded rules to the register's setpoints once a process engineer signs off, and (b) decide the litres-vs-percent question for both level sensors — the platform currently stores percent while the register, the procurement logic, and the tote-changeout trigger all reason in litres. Neither is safe to change unilaterally, so both are left as-is and flagged here.
 
+### 1.2 Retuned to register setpoints — 2026-08-18
+
+Actioned by [`workers/seed_fault_tree_rules.py`](workers/seed_fault_tree_rules.py) (now `ON CONFLICT ... DO UPDATE`, so re-running it pushes retuned params into an already-seeded DB rather than being a no-op):
+
+| Rule | Change |
+|---|---|
+| `so2_out_emissions_excursion_v1` | 200 ppm → **50 ppm** (register trip, verbatim) |
+| `koh_depletion_low_ph_v1` | 7.5 → **8.0** (register trip, verbatim) |
+| `so2_in_high_absolute_v1` | **new** — 2000 ppm absolute ceiling (register trip); the existing `so2_in_combustion_instability_v1` z-score rule is kept alongside it, different failure signature |
+| `product_loop_overtemp_v1` | retuned in place, 60°C → **65°C**, severity critical → warning (top of normal band), paired with new `product_loop_overtemp_hard_trip_v1` (≥70°C, critical — register's HARD TRIP). Kept the same rule name/id rather than renaming: a real alarm from this rule already exists in the `alarms` table (FK-referenced), so Postgres refuses a delete/rename — retune-in-place was the only safe option. Advisory only; does not itself drive the bypass damper, which is assumed to be a separate PLC/edge interlock if one exists. |
+| `k2so3_tank_full_v1` | **new** — 90% (no rule existed before) |
+| `koh_tank_low_level_v1` | unchanged numerically (15%) but basis now documented |
+
+Litres-vs-percent (item b) resolved as: keep percent storage everywhere (no schema/ingestion change — `admin_logistics.py`'s procurement forecast already regresses in percent), convert the register's litre trips to percent-equivalents assuming a **1000L IBC tote for both tanks**. For `level_K2SO3_tank` that capacity is sourced from the tag's own `location` field ("1000L product IBC tote"), so 900L → 90% is a straightforward transcription. For `level_KOH_tank` no capacity is recorded anywhere in this codebase — 1000L was an assumption the user made explicitly for this pass, not a sourced fact, and 150L → 15% depends on it. **Still open:** confirm the KOH tote's actual rated capacity against the physical hardware; if it's not 1000L, `koh_tank_low_level_v1`'s `min: 15` needs re-deriving.
+
 ---
 
 ## 2. Security audit
