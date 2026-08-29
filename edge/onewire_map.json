@@ -1,0 +1,18 @@
+{
+  "_comment": "TODO: replace every device_id below with the real ROM id from `ls /sys/bus/w1/devices` on the Pi (after enabling dtoverlay=w1-gpio in /boot/config.txt and rebooting). These sensor_ids match seed/seed.py's SENSORS list. All 15 device_id values below are IDENTICAL PLACEHOLDERS - DS18B20s have no address pins, so wire and read one probe at a time, label it, and fill in its unique ROM id here before moving to the next. Leaving duplicates in place will make every probe read the same value.",
+  "temp_probe_01": { "device_id": "28-000000000000" },
+  "temp_probe_02": { "device_id": "28-000000000000" },
+  "temp_probe_03": { "device_id": "28-000000000000" },
+  "temp_probe_04": { "device_id": "28-000000000000" },
+  "temp_probe_05": { "device_id": "28-000000000000" },
+  "temp_probe_06": { "device_id": "28-000000000000" },
+  "temp_probe_07": { "device_id": "28-000000000000" },
+  "temp_probe_08": { "device_id": "28-000000000000" },
+  "temp_probe_09": { "device_id": "28-000000000000" },
+  "temp_probe_10": { "device_id": "28-000000000000" },
+  "temp_probe_11": { "device_id": "28-000000000000" },
+  "temp_probe_12": { "device_id": "28-000000000000" },
+  "temp_probe_13": { "device_id": "28-000000000000" },
+  "temp_probe_14": { "device_id": "28-000000000000" },
+  "temp_probe_15": { "device_id": "28-000000000000" }
+}

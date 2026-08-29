@@ -32,6 +32,11 @@ class SensorSpec:
     unit: str
     min_valid: Optional[float]
     max_valid: Optional[float]
+    # 'modbus' | 'onewire' | 'pms7003' | 'unconfirmed' | None (see
+    # migrations/versions/0015_sensor_interface.py). None/'unconfirmed'
+    # means this sensor is tracked in the manifest but not yet claimed by
+    # any real poller - e.g. the ASAIR O2 sensor pending a bus decision.
+    interface: Optional[str] = None
 
 
 class ManifestSource(ABC):
@@ -64,7 +69,7 @@ class PostgresManifestSource(ManifestSource):
                 rows = conn.execute(
                     text(
                         """
-                        SELECT plant_id, sensor_id, tag, kind, unit, min_valid, max_valid
+                        SELECT plant_id, sensor_id, tag, kind, unit, min_valid, max_valid, interface
                         FROM sensors WHERE plant_id = :p ORDER BY sensor_id
                         """
                     ),

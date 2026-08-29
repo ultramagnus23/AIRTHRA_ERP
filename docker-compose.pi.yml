@@ -1,0 +1,56 @@
+# Runs ON THE RASPBERRY PI itself - separate from docker-compose.yml at the
+# repo root, which is the cloud/dev stack (Postgres, Mosquitto, Caddy,
+# Grafana, MinIO) and has no business running on a Pi. See edge/DEPLOY.md
+# for the full walkthrough.
+#
+# Usage on the Pi:
+#   docker compose -f docker-compose.pi.yml up -d
+#   docker compose -f docker-compose.pi.yml logs -f
+services:
+  edge:
+    image: airthra-edge:latest
+    container_name: airthra_edge
+    restart: unless-stopped
+    # Add "--mock" here to smoke-test the container/wiring/MQTT connectivity
+    # without any real hardware attached, before switching to real sensors.
+    command: ["--plant-id", "goa_pilot_01"]
+    env_file:
+      - .env.pi
+    volumes:
+      # Wiring maps - bind-mounted (not baked into the image) so
+      # commissioning edits don't need a rebuild. Read-only: the daemon
+      # only ever reads these.
+      - ./edge/modbus_map.json:/app/edge/modbus_map.json:ro
+      - ./edge/onewire_map.json:/app/edge/onewire_map.json:ro
+      - ./edge/pms7003_map.json:/app/edge/pms7003_map.json:ro
+      # Manifest cache, SQLite offline buffer, watchdog heartbeat/stats -
+      # named volumes so they survive `docker compose up` recreating the
+      # container (image update, restart, etc). Losing edge_data would
+      # silently drop any buffered-but-not-yet-backfilled readings.
+      - edge_cache:/app/edge/cache
+      - edge_data:/app/edge/data
+      # DS18B20 1-Wire sysfs tree - NOT a device node, so it can't go
+      # under `devices:` below; a read-only bind mount of the host's live
+      # kernel-driver-populated sysfs path works without --privileged.
+      - /sys/bus/w1/devices:/sys/bus/w1/devices:ro
+      # MQTT TLS CA cert (docker/mosquitto/certs/ca.crt from whoever ran
+      # gen_certs.sh for the VPS broker) - only read if MQTT_USE_TLS=true
+      # and MQTT_CA_CERT_PATH points here; harmless no-op file otherwise.
+      # Put the actual file at ./certs/ca.crt next to this compose file.
+      - ./certs/ca.crt:/app/certs/ca.crt:ro
+    devices:
+      # RS-485/Modbus buses (SmartElex USB-to-RS485 adapters). Confirm the
+      # actual /dev/ttyUSB* assignment with `ls /dev/ttyUSB*` on the Pi -
+      # USB enumeration order isn't guaranteed to be stable across reboots
+      # if both adapters are ever unplugged/replugged; consider udev rules
+      # keyed on each adapter's USB serial number for a production install.
+      - /dev/ttyUSB0
+      - /dev/ttyUSB1
+      # PMS7003 UART - adjust to the port it's actually wired to
+      # (/dev/serial0 if using the Pi's primary UART pins, or another
+      # /dev/ttyUSBn if it's on a third USB-serial adapter).
+      - /dev/ttyAMA0
+
+volumes:
+  edge_cache:
+  edge_data:

@@ -45,7 +45,17 @@ from edge.buffer import SqliteBuffer  # noqa: E402
 from edge.clock import ClockGate  # noqa: E402
 from edge.config import EdgeConfig  # noqa: E402
 from edge.manifest import PostgresManifestSource, load_manifest  # noqa: E402
-from edge.mockgen import MockSensorSource, MockSetpointSource  # noqa: E402
+from edge.mockgen import (  # noqa: E402
+    CompositeSensorSource,
+    MockSensorSource,
+    MockSetpointSource,
+    RealModbusPoller,
+    RealOneWirePoller,
+    RealPMS7003Poller,
+    load_modbus_map,
+    load_onewire_map,
+    load_pms7003_map,
+)
 from shared import quality as q  # noqa: E402
 
 logging.basicConfig(
@@ -115,11 +125,11 @@ class Context:
 # Poller
 # ---------------------------------------------------------------------------
 
-async def poller_task(ctx: Context, sensor_source: MockSensorSource, setpoint_source: MockSetpointSource) -> None:
+async def poller_task(ctx: Context, sensor_source, setpoint_source: MockSetpointSource) -> None:
     cfg = ctx.cfg
     stop_path = cfg.stop_request_path()
-    log.info("poller: started (mock, %d sensors, interval=%.1fs)",
-              len(sensor_source.sensor_ids()), cfg.poll_interval_s)
+    log.info("poller: started (%s, %d sensors, interval=%.1fs)",
+              "mock" if cfg.mock else "real", len(sensor_source.sensor_ids()), cfg.poll_interval_s)
     while not ctx.shutdown.is_set():
         if stop_path.exists():
             log.info("poller: graceful stop requested (%s) - no more readings will be generated", stop_path)
@@ -156,17 +166,15 @@ async def poller_task(ctx: Context, sensor_source: MockSensorSource, setpoint_so
         await asyncio.sleep(max(0.0, cfg.poll_interval_s - elapsed))
 
 
-async def _poll_once(ctx: Context, sensor_source: MockSensorSource, setpoint_source: MockSetpointSource, now: datetime) -> None:
+async def _poll_once(ctx: Context, sensor_source, setpoint_source: MockSetpointSource, now: datetime) -> None:
     cfg = ctx.cfg
     ts_iso = now.isoformat()
     for sensor_id in sensor_source.sensor_ids():
-        # Each individual read is conceptually wrapped in a 2s timeout (real
-        # Modbus reads can hang); --mock reads are instant, so we just await
-        # a coroutine wrapper that honours the same timeout budget so the
-        # code path/behaviour matches what real-mode would do on a timeout.
+        # Each individual read is wrapped in a timeout budget: real Modbus/
+        # serial reads can hang, --mock reads are instant either way.
         try:
             value, flag = await asyncio.wait_for(
-                _mock_read(sensor_source, sensor_id), timeout=cfg.read_timeout_s
+                _read_one(sensor_source, sensor_id), timeout=cfg.read_timeout_s
             )
         except asyncio.TimeoutError:
             value, flag = None, q.COMM_ERROR
@@ -189,23 +197,46 @@ async def _poll_once(ctx: Context, sensor_source: MockSensorSource, setpoint_sou
     ctx.write_stats()
 
 
-async def _mock_read(sensor_source: MockSensorSource, sensor_id: str):
-    # No actual I/O in mock mode - this coroutine exists purely so the
-    # timeout-wrapping structure above matches what a real pymodbus read
-    # (`await asyncio.wait_for(client.read_holding_registers(...), 2)`)
-    # would look like.
-    return sensor_source.read(sensor_id)
+async def _read_one(sensor_source, sensor_id: str):
+    # MockSensorSource.read() is a plain sync call (no I/O to await);
+    # CompositeSensorSource.read() (real Modbus/1-Wire/PMS7003) is a
+    # coroutine function since it does real, potentially-blocking I/O. This
+    # dispatches to whichever shape sensor_source actually has so the
+    # asyncio.wait_for timeout wrapper above works identically either way.
+    result = sensor_source.read(sensor_id)
+    if asyncio.iscoroutine(result):
+        return await result
+    return result
 
 
 # ---------------------------------------------------------------------------
 # Publisher
 # ---------------------------------------------------------------------------
 
+def _build_tls_params(cfg: EdgeConfig) -> Optional["aiomqtt.TLSParameters"]:
+    """None when TLS is off (plaintext, e.g. local same-host dev against
+    the 1883 listener) - aiomqtt.Client treats tls_params=None as "don't
+    use TLS". When on, ca_certs is required (EdgeConfig.__post_init__
+    already enforced that) so the client verifies it's actually talking to
+    the real broker rather than trusting the self-signed cert blindly.
+    certfile/keyfile are only set if both are present, for a future mTLS
+    upgrade (mosquitto.conf's require_certificate is false today, so the
+    broker doesn't ask for these yet - see EdgeConfig's mqtt_use_tls docstring)."""
+    if not cfg.mqtt_use_tls:
+        return None
+    return aiomqtt.TLSParameters(
+        ca_certs=cfg.mqtt_ca_cert_path,
+        certfile=cfg.mqtt_client_cert_path or None,
+        keyfile=cfg.mqtt_client_key_path or None,
+    )
+
+
 async def publisher_task(ctx: Context) -> None:
     cfg = ctx.cfg
     while not ctx.shutdown.is_set():
         try:
-            log.info("publisher: connecting to mqtt://%s:%d as %s",
+            log.info("publisher: connecting to %s://%s:%d as %s",
+                      "mqtts" if cfg.mqtt_use_tls else "mqtt",
                       cfg.mqtt_host, cfg.mqtt_port, cfg.mqtt_username)
             async with aiomqtt.Client(
                 hostname=cfg.mqtt_host,
@@ -213,6 +244,8 @@ async def publisher_task(ctx: Context) -> None:
                 username=cfg.mqtt_username or None,
                 password=cfg.mqtt_password or None,
                 identifier=f"edge-{cfg.plant_id}",
+                tls_params=_build_tls_params(cfg),
+                tls_insecure=cfg.mqtt_tls_insecure if cfg.mqtt_use_tls else None,
             ) as client:
                 ctx.mqtt_client = client
                 ctx.connected.set()
@@ -424,6 +457,56 @@ async def _watchdog_check(ctx: Context, heartbeat_path: Path) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _build_real_sensor_source(cfg: EdgeConfig, sensors) -> CompositeSensorSource:
+    """Assembles the real (non-mock) sensor source: loads the three wiring
+    maps, splits the manifest three ways by which map claims each
+    sensor_id, and fans them out via CompositeSensorSource so the rest of
+    the daemon still only ever sees one sensor_source object - exactly
+    like it does with MockSensorSource today."""
+    modbus_map = load_modbus_map(cfg.modbus_map_path())
+    onewire_map = load_onewire_map(cfg.onewire_map_path())
+    pms7003_map = load_pms7003_map(cfg.pms7003_map_path())
+
+    modbus_sensors = [s for s in sensors if s.sensor_id in modbus_map]
+    onewire_sensors = [s for s in sensors if s.sensor_id in onewire_map]
+    pms_sensors = [s for s in sensors if s.sensor_id in pms7003_map]
+
+    claimed = {s.sensor_id for s in modbus_sensors + onewire_sensors + pms_sensors}
+    unclaimed = [s for s in sensors if s.sensor_id not in claimed]
+
+    # A sensor tracked in the manifest with interface unset/'unconfirmed'
+    # (e.g. the ASAIR O2 sensor - see seed/seed.py) is expected to be
+    # unclaimed until its physical bus is decided. Skip it with a loud
+    # warning rather than treating it the same as a real sensor that's
+    # simply missing from its wiring map by mistake.
+    skipped = [s.sensor_id for s in unclaimed if s.interface in (None, "unconfirmed")]
+    if skipped:
+        log.warning(
+            "real sensor source: skipping sensor(s) with unconfirmed interface "
+            "(not polled until resolved): %s", skipped,
+        )
+
+    misconfigured = [s.sensor_id for s in unclaimed if s.interface not in (None, "unconfirmed")]
+    if misconfigured:
+        raise SystemExit(
+            f"real mode: sensor(s) {misconfigured} declare a real interface in the "
+            "`sensors` table but have no entry in the matching wiring map - add them "
+            "to edge/modbus_map.json, edge/onewire_map.json or edge/pms7003_map.json "
+            "before starting the daemon without --mock."
+        )
+
+    log.info(
+        "real sensor source: %d modbus, %d 1-wire, %d pms7003, %d unconfirmed (skipped)",
+        len(modbus_sensors), len(onewire_sensors), len(pms_sensors), len(skipped),
+    )
+
+    return CompositeSensorSource([
+        RealModbusPoller(modbus_sensors, modbus_map),
+        RealOneWirePoller(onewire_sensors, onewire_map),
+        RealPMS7003Poller(pms_sensors, pms7003_map),
+    ])
+
+
 async def main_async(cfg: EdgeConfig) -> None:
     log.info("edge daemon starting: plant_id=%s mock=%s", cfg.plant_id, cfg.mock)
 
@@ -456,16 +539,13 @@ async def main_async(cfg: EdgeConfig) -> None:
     sensors = load_manifest(cfg.plant_id, source, cfg.manifest_cache_path())
     log.info("manifest: %s", ", ".join(s.sensor_id for s in sensors))
 
-    if not cfg.mock:
-        raise SystemExit(
-            "Real (non-mock) Modbus polling is not implemented in this "
-            "environment - there is no field hardware to talk to. Run with "
-            "--mock. (pymodbus is installed and edge/mockgen.py documents "
-            "the swap-in point for a RealModbusPoller.)"
-        )
-
-    sensor_source = MockSensorSource(sensors)
     setpoint_source = MockSetpointSource()
+
+    if cfg.mock:
+        sensor_source = MockSensorSource(sensors)
+    else:
+        sensor_source = _build_real_sensor_source(cfg, sensors)
+        await sensor_source.start()
 
     ctx = Context(cfg)
     await ctx.buffer.open()
@@ -490,6 +570,8 @@ async def main_async(cfg: EdgeConfig) -> None:
             t.cancel()
         await asyncio.gather(*background, return_exceptions=True)
         await ctx.buffer.close()
+        if not cfg.mock:
+            await sensor_source.close()
 
 
 async def _wait_for_flush(ctx: Context, timeout: float = 30.0) -> None:

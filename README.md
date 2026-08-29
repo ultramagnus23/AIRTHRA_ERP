@@ -103,9 +103,14 @@ Safe to run repeatedly (`alembic upgrade head` again is a no-op).
 ```
 
 Inserts: the Airthra company record, plant `goa_pilot_01` (Goa, India),
-its sensor manifest (SO2 in/out, pH, temp, KOH/K2SO3 tank levels, flow),
-and 5 reference materials (MS plate, SS316 rod, MS pipe, PVC pipe, EPDM
-gasket sheet). Safe to re-run - upserts on natural keys, no duplicates.
+its sensor manifest (SO2 in/out, pH, temp, KOH/K2SO3 tank levels, flow, and
+an ASAIR AO-03 O2 sensor via Modbus - the O2 cell itself is a raw analog
+current output, read through a channel of the Waveshare 8-channel analog
+module on the RS-485 bus, which is the actual Modbus slave; 15 DS18B20
+temperature probes via 1-Wire; PMS7003 PM1.0/2.5/10 via UART - see "Go-live
+checklist" below), and 5 reference materials (MS plate, SS316 rod, MS pipe,
+PVC pipe, EPDM gasket sheet). Safe to re-run - upserts on natural keys, no
+duplicates.
 
 ## 7. Run the P0 gate
 
@@ -163,3 +168,55 @@ handful of status/kind enums the PRD didn't fully specify). Summary:
 - No API/auth layer yet, so nothing actually sets `app.current_plant_ids`
   in a live request path - that wiring is P1+. The gate script sets it
   directly to prove the Postgres-level mechanism works.
+
+## Go-live checklist: connecting real sensor hardware
+
+The full pipeline (edge daemon → MQTT → ingest service → Postgres/Timescale
+→ API/WebSocket → frontend) is built and has been proven end-to-end against
+`edge/mockgen.py`'s `MockSensorSource` - a sinusoidal simulator standing in
+for real hardware. Everything downstream of "a reading lands on the MQTT
+topic" already works against real data with no further changes. What's
+still needed to run `edge/daemon.py` against the physical Goa pilot plant
+instead of `--mock`:
+
+1. **Fill in the wiring maps with real values from the datasheets.**
+   `edge/modbus_map.json` (Modbus `bus`/`slave_id`/`register` for the 7
+   process-value sensors plus `o2_pct`), `edge/onewire_map.json` (the real
+   DS18B20 ROM id for each of the 15 probes, one at a time - see the file's
+   `_comment` for how to find them), and `edge/pms7003_map.json` (the real
+   serial port the PMS7003 is wired to). All three currently ship with
+   clearly-marked placeholder values (`TODO`/dummy `0`s/a duplicated fake
+   ROM id) - `edge/test_real_pollers.py` (below) will report
+   `EXCEPTION`/`COMM_ERROR` on anything still using them.
+2. **Get the Waveshare 8-channel analog module's register map** for the O2
+   channel. The ASAIR AO-03 O2 sensor's own interface is now confirmed (its
+   datasheet: a raw analog current output, 0.1mA in air, linear 1-25% Vol
+   O2 across a 100 ohm load resistor - not a digital protocol of its own),
+   so `seed/seed.py` already has it as `interface='modbus'`
+   (`sensor_id="o2_pct"`), read through a channel of the Waveshare module on
+   the RS-485 bus. What's still missing is that module's own datasheet, to
+   know which Modbus holding register the O2 channel lands on -
+   `edge/modbus_map.json`'s `o2_pct` entry is a placeholder until then.
+3. **Run the dry-run wiring check** before attempting a full daemon run:
+   ```bash
+   python edge/test_real_pollers.py --plant-id goa_pilot_01
+   ```
+   Reports GOOD/COMM_ERROR/OUT_OF_RANGE/FROZEN (or a raw exception) per
+   sensor without touching MQTT or the SQLite buffer - the fast way to
+   catch a wrong ROM id or register address before the full daemon is also
+   juggling backfill/reconnect logic.
+4. **Re-run `seed/seed.py`** if the manifest (ranges, new sensors, the
+   relay module once its Modbus readability is confirmed - see
+   `edge/modbus_map.json`'s `_comment_relay_module`) has changed since the
+   last time it ran.
+5. **Flip off `--mock`**: `python edge/daemon.py --plant-id goa_pilot_01`
+   (no `--mock` flag) now polls `RealModbusPoller`/`RealOneWirePoller`/
+   `RealPMS7003Poller` via `CompositeSensorSource` instead of the
+   simulator - see `edge/daemon.py`'s `_build_real_sensor_source`. No
+   other code changes needed; the MQTT publish shape, SQLite buffering,
+   backfill, and watchdog are identical in both modes.
+
+For getting this actually running on the Raspberry Pi at the plant
+(containerizing it, OS/interface setup, cross-building for ARM, and
+configuring TLS so a Pi in the field can reach the cloud broker), see
+**[edge/DEPLOY.md](edge/DEPLOY.md)**.

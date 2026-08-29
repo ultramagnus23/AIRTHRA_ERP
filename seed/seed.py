@@ -75,15 +75,57 @@ PLANT = {
     "timezone_display": "Asia/Kolkata",
 }
 
-# tag, kind, unit, min_valid, max_valid
+# tag, kind, unit, min_valid, max_valid, interface
+#
+# interface is one of 'modbus' | 'onewire' | 'pms7003' | 'unconfirmed'
+# (migrations/versions/0015_sensor_interface.py) - it's how edge/daemon.py's
+# CompositeSensorSource decides which real poller a sensor belongs to. A row
+# with interface='unconfirmed' is tracked (visible in the manifest, in
+# dashboards, in alarm config) but deliberately excluded from real-mode
+# polling until it's resolved - see edge/daemon.py's _build_real_sensor_source.
+#
+# The first 7 are the original process-value manifest, read via the two
+# RS-485/Modbus buses once real hardware is wired - see edge/modbus_map.json,
+# sensor_id must match the entries there exactly. min_valid/max_valid on all
+# of these are TODO placeholders pending the real device datasheets/plant
+# commissioning limits, NOT validated safety thresholds - do not treat them
+# as alarm setpoints until confirmed.
+#
+# The 15 temp_probe_* rows are the DS18B20 1-Wire probes (edge/onewire_map.json)
+# and pm1_0/pm2_5/pm10 are the PMS7003 dust sensor (edge/pms7003_map.json).
+# min_valid/max_valid below are placeholder ranges pending real deployment
+# locations - e.g. a probe in the flue duct vs. a storage tank should not
+# share the same valid range; narrow these once each probe's mounting point
+# is known.
+#
+# The ASAIR O2 sensor (AO-03, per its datasheet - www.aosong.com) is an
+# electrochemical cell with a raw ANALOG current output (0.1mA in air,
+# linear 1-25% Vol O2 across a 100 ohm load resistor per the datasheet), not
+# a digital interface of its own. It reads through the Waveshare 8-channel
+# analog module on the RS-485 bus (per the plant BOM) - which is itself a
+# Modbus RTU slave - so interface='modbus' here refers to that module, not
+# the O2 cell directly. min_valid/max_valid (1-25%) match the datasheet's
+# stated linear range exactly; TODO confirm against actual flue-gas O2 swing
+# expected during upset conditions (excess-O2 combustion control can dip
+# below the sensor's rated linear floor). Still needs: the Waveshare
+# module's own register map (a separate datasheet) to know which holding
+# register this channel lands on - see edge/modbus_map.json's o2_pct entry.
 SENSORS = [
-    ("SO2_in", "SO2_in", "ppm", 0, 5000),
-    ("SO2_out", "SO2_out", "ppm", 0, 500),
-    ("pH", "pH", "pH", 0, 14),
-    ("temp_C", "temperature", "C", -10, 200),
-    ("level_KOH_tank", "level", "%", 0, 100),
-    ("level_K2SO3_tank", "level", "%", 0, 100),
-    ("flow", "flow", "m3/h", 0, 500),
+    ("SO2_in", "SO2_in", "ppm", 0, 5000, "modbus"),
+    ("SO2_out", "SO2_out", "ppm", 0, 500, "modbus"),
+    ("pH", "pH", "pH", 0, 14, "modbus"),
+    ("temp_C", "temperature", "C", -10, 200, "modbus"),
+    ("level_KOH_tank", "level", "%", 0, 100, "modbus"),
+    ("level_K2SO3_tank", "level", "%", 0, 100, "modbus"),
+    ("flow", "flow", "m3/h", 0, 500, "modbus"),
+] + [
+    (f"temp_probe_{i:02d}", "temperature", "C", -10, 200, "onewire") for i in range(1, 16)
+] + [
+    ("pm1_0", "pm1_0", "ug/m3", 0, 1000, "pms7003"),
+    ("pm2_5", "pm2_5", "ug/m3", 0, 1000, "pms7003"),
+    ("pm10", "pm10", "ug/m3", 0, 1000, "pms7003"),
+] + [
+    ("o2_pct", "o2", "%", 1, 25, "modbus"),  # AO-03 datasheet linear range; via Waveshare analog module
 ]
 
 # name, grade, density_kg_m3, rate_per_kg, hsn
@@ -154,15 +196,16 @@ def main() -> None:
             PLANT,
         )
 
-        for tag, kind, unit, min_valid, max_valid in SENSORS:
+        for tag, kind, unit, min_valid, max_valid, interface in SENSORS:
             conn.execute(
                 text(
                     """
-                    INSERT INTO sensors (plant_id, sensor_id, tag, kind, unit, min_valid, max_valid)
-                    VALUES (:plant_id, :sensor_id, :tag, :kind, :unit, :min_valid, :max_valid)
+                    INSERT INTO sensors (plant_id, sensor_id, tag, kind, unit, min_valid, max_valid, interface)
+                    VALUES (:plant_id, :sensor_id, :tag, :kind, :unit, :min_valid, :max_valid, :interface)
                     ON CONFLICT (plant_id, sensor_id) DO UPDATE SET
                         tag = EXCLUDED.tag, kind = EXCLUDED.kind, unit = EXCLUDED.unit,
-                        min_valid = EXCLUDED.min_valid, max_valid = EXCLUDED.max_valid
+                        min_valid = EXCLUDED.min_valid, max_valid = EXCLUDED.max_valid,
+                        interface = EXCLUDED.interface
                     """
                 ),
                 {
@@ -173,6 +216,7 @@ def main() -> None:
                     "unit": unit,
                     "min_valid": min_valid,
                     "max_valid": max_valid,
+                    "interface": interface,
                 },
             )
 
