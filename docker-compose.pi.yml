@@ -16,6 +16,11 @@ services:
     command: ["--plant-id", "goa_pilot_01"]
     env_file:
       - .env.pi
+    ports:
+      # Local debug dashboard (edge/dashboard.py) - open http://<pi-ip>:8080
+      # (or http://localhost:8080 on the Pi's own screen) for a live view
+      # with no cloud/network dependency at all.
+      - "8080:8080"
     volumes:
       # Wiring maps - bind-mounted (not baked into the image) so
       # commissioning edits don't need a rebuild. Read-only: the daemon
@@ -23,10 +28,12 @@ services:
       - ./edge/modbus_map.json:/app/edge/modbus_map.json:ro
       - ./edge/onewire_map.json:/app/edge/onewire_map.json:ro
       - ./edge/pms7003_map.json:/app/edge/pms7003_map.json:ro
-      # Manifest cache, SQLite offline buffer, watchdog heartbeat/stats -
-      # named volumes so they survive `docker compose up` recreating the
-      # container (image update, restart, etc). Losing edge_data would
-      # silently drop any buffered-but-not-yet-backfilled readings.
+      # Manifest cache, SQLite offline buffer, the permanent local
+      # readings log (edge/local_store.py) that backs the dashboard below,
+      # watchdog heartbeat/stats - named volumes so they survive
+      # `docker compose up` recreating the container (image update,
+      # restart, etc). Losing edge_data would silently drop any
+      # buffered-but-not-yet-backfilled readings AND the local debug history.
       - edge_cache:/app/edge/cache
       - edge_data:/app/edge/data
       # DS18B20 1-Wire sysfs tree - NOT a device node, so it can't go

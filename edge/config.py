@@ -74,6 +74,16 @@ class EdgeConfig:
     # reduces TLS to "encrypted" without "verified who I'm talking to".
     mqtt_tls_insecure: bool = field(default_factory=lambda: _env_bool("MQTT_TLS_INSECURE"))
 
+    # --- Local debug store + dashboard (edge/local_store.py, edge/dashboard.py) ---
+    # A permanent local reading log, independent of cloud/MQTT reachability,
+    # bounded by age rather than growing forever - see local_store.py's
+    # docstring for why this is a different thing from the SqliteBuffer
+    # outbox above. dashboard_task serves a live view of it on this port.
+    local_retention_days: float = field(
+        default_factory=lambda: float(os.environ.get("LOCAL_RETENTION_DAYS", "7"))
+    )
+    dashboard_port: int = field(default_factory=lambda: int(os.environ.get("DASHBOARD_PORT", "8080")))
+
     # --- Timing ---
     poll_interval_s: float = 1.0
     publish_interval_s: float = 1.0
@@ -112,6 +122,9 @@ class EdgeConfig:
 
     def buffer_db_path(self) -> Path:
         return self.data_dir / f"buffer_{self.plant_id}.db"
+
+    def local_store_db_path(self) -> Path:
+        return self.data_dir / f"local_readings_{self.plant_id}.db"
 
     def heartbeat_path(self) -> Path:
         return self.data_dir / f"watchdog_{self.plant_id}.heartbeat"

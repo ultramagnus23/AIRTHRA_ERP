@@ -45,5 +45,9 @@ RUN mkdir -p /app/edge/cache /app/edge/data
 # edited during commissioning without wanting a rebuild each time. Bind-
 # mount them at runtime instead.
 
+# Local debug dashboard (edge/dashboard.py) - see docker-compose.pi.yml
+# for the port mapping that makes this reachable from outside the container.
+EXPOSE 8080
+
 ENTRYPOINT ["python", "edge/daemon.py"]
 CMD ["--plant-id", "goa_pilot_01"]

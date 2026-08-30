@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 """Airthra edge daemon (P1).
 
-Single asyncio process, four concurrent tasks:
-  - Poller:    reads the sensor manifest (real mode: Modbus: not built here,
-               no field hardware; --mock mode: sinusoidal generator with
-               injected faults) and produces (plant_id, sensor_id, ts, value,
-               quality_flag) readings + occasional VFD setpoint changes.
+Single asyncio process, five concurrent tasks:
+  - Poller:    reads the sensor manifest (real mode: Modbus/1-Wire/PMS7003
+               via edge/mockgen.py's real pollers; --mock mode: sinusoidal
+               generator with injected faults) and produces (plant_id,
+               sensor_id, ts, value, quality_flag) readings + occasional
+               VFD setpoint changes. Every reading is written to the local
+               debug store (edge/local_store.py) unconditionally, in
+               addition to being queued for MQTT publish below - the two
+               are redundant by design, not one a fallback for the other.
   - Publisher: batches readings every ~1s, publishes to MQTT
                plants/{plant_id}/readings at QoS 1. On broker loss, buffers
                to a local SQLite WAL file instead of dropping data.
@@ -15,6 +19,11 @@ Single asyncio process, four concurrent tasks:
   - Watchdog:  every 10s checks poller/publisher/queue/disk health and
                writes a heartbeat pulse file if (and only if) everything
                looks healthy.
+  - Dashboard: serves a live local debug view (edge/dashboard.py) on
+               DASHBOARD_PORT (default 8080) - no cloud/network dependency,
+               reads straight off the local store above. This is what
+               someone standing at the Pi opens in a browser to see
+               current sensor values without needing the cloud dashboard.
 
 Usage:
     python edge/daemon.py --mock --plant-id goa_pilot_01
@@ -44,6 +53,8 @@ import aiomqtt  # noqa: E402
 from edge.buffer import SqliteBuffer  # noqa: E402
 from edge.clock import ClockGate  # noqa: E402
 from edge.config import EdgeConfig  # noqa: E402
+from edge.dashboard import dashboard_task  # noqa: E402
+from edge.local_store import LocalReadingsStore  # noqa: E402
 from edge.manifest import PostgresManifestSource, load_manifest  # noqa: E402
 from edge.mockgen import (  # noqa: E402
     CompositeSensorSource,
@@ -76,6 +87,7 @@ class Context:
         self.cfg = cfg
         self.outbox: asyncio.Queue = asyncio.Queue()
         self.buffer = SqliteBuffer(cfg.buffer_db_path())
+        self.local_store = LocalReadingsStore(cfg.local_store_db_path(), cfg.local_retention_days)
         self.clock = ClockGate(cfg.clock_state_path())
         self.connected = asyncio.Event()
         self.shutdown = asyncio.Event()
@@ -169,6 +181,7 @@ async def poller_task(ctx: Context, sensor_source, setpoint_source: MockSetpoint
 async def _poll_once(ctx: Context, sensor_source, setpoint_source: MockSetpointSource, now: datetime) -> None:
     cfg = ctx.cfg
     ts_iso = now.isoformat()
+    local_batch = []
     for sensor_id in sensor_source.sensor_ids():
         # Each individual read is wrapped in a timeout budget: real Modbus/
         # serial reads can hang, --mock reads are instant either way.
@@ -188,6 +201,12 @@ async def _poll_once(ctx: Context, sensor_source, setpoint_source: MockSetpointS
         }
         ctx.outbox.put_nowait(("reading", reading))
         ctx.readings_generated_total += 1
+        local_batch.append(reading)
+
+    # Written unconditionally, independent of MQTT/cloud connectivity - see
+    # edge/local_store.py's docstring. This is the redundant local copy, not
+    # a substitute for the outbox/buffer publish path above.
+    await ctx.local_store.insert_many(local_batch)
 
     for change in setpoint_source.poll():
         change["plant_id"] = cfg.plant_id
@@ -549,6 +568,7 @@ async def main_async(cfg: EdgeConfig) -> None:
 
     ctx = Context(cfg)
     await ctx.buffer.open()
+    await ctx.local_store.open()
 
     loop = asyncio.get_running_loop()
 
@@ -556,7 +576,8 @@ async def main_async(cfg: EdgeConfig) -> None:
     publisher = loop.create_task(publisher_task(ctx), name="publisher")
     sync = loop.create_task(sync_task(ctx), name="sync")
     watchdog = loop.create_task(watchdog_task(ctx), name="watchdog")
-    background = [publisher, sync, watchdog]
+    dashboard = loop.create_task(dashboard_task(ctx), name="dashboard")
+    background = [publisher, sync, watchdog, dashboard]
 
     try:
         await poller  # returns on ctx.shutdown OR a graceful stop-file request
@@ -570,6 +591,7 @@ async def main_async(cfg: EdgeConfig) -> None:
             t.cancel()
         await asyncio.gather(*background, return_exceptions=True)
         await ctx.buffer.close()
+        await ctx.local_store.close()
         if not cfg.mock:
             await sensor_source.close()
 
