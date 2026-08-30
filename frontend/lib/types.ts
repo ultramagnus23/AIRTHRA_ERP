@@ -354,7 +354,7 @@ export const SENSOR_MANIFEST: SensorMeta[] = [
     max: 100,
     normal: [25, 100],
     threshold: "<150 L — order more KOH",
-    note: "Register specifies litres (200–1000 L); this platform stores percent. Not converted — needs a decision.",
+    note: "Register specifies litres (200–1000 L); this platform stores percent. Alarm rule (koh_tank_low_level_v1) trips at 15%, assuming a 1000L tote — that capacity isn't independently confirmed, see AUDIT.md #1.2.",
     accent: "moss",
   },
   {
@@ -371,7 +371,7 @@ export const SENSOR_MANIFEST: SensorMeta[] = [
     max: 100,
     normal: [0, 85],
     threshold: ">900 L — alert for tote changeout",
-    note: "Register specifies litres (50–950 L); this platform stores percent. Not converted — needs a decision.",
+    note: "Register specifies litres (50–950 L); this platform stores percent. Alarm rule (k2so3_tank_full_v1) trips at 90%, based on this tote's own 1000L rated capacity (see location above).",
     accent: "moss",
   },
 

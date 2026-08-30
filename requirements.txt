@@ -10,6 +10,10 @@ pydantic==2.10.3
 aiomqtt==2.5.1
 aiosqlite==0.22.1
 pymodbus==3.15.0
+# RealPMS7003Poller (edge/mockgen.py) reads raw UART frames directly via
+# pyserial - it's a separate dependency from pymodbus, which only covers the
+# Modbus RS-485 buses.
+pyserial==3.5
 
 # --- P2: API + live UI ---
 pyjwt==2.10.1

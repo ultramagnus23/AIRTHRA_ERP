@@ -1,0 +1,16 @@
+# Dependencies for the Raspberry Pi edge daemon ONLY - a deliberate subset
+# of the root requirements.txt. Nothing from api/, frontend/, ingest/, or
+# workers/ (fastapi, boto3, reportlab, etc.) belongs on the Pi; keeping this
+# list separate is what lets edge/Dockerfile build a small, ARM-friendly
+# image instead of dragging in the whole backend's dependency tree.
+#
+# Versions must match requirements.txt exactly - both files describe the
+# same edge/ code, just for two different install targets (dev machine
+# running the whole stack vs. the Pi running edge/daemon.py alone).
+python-dotenv==1.0.1
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.3
+aiomqtt==2.5.1
+aiosqlite==0.22.1
+pymodbus==3.15.0
+pyserial==3.5

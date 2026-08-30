@@ -1,0 +1,17 @@
+# Keeps `docker build` context small - matters most for edge/Dockerfile,
+# whose build context is the repo root but which only COPYs edge/ and
+# shared/. Without this, every build (including the root Dockerfile's)
+# uploads the whole monorepo - node_modules, .git history, the Python
+# venv - to the Docker daemon first.
+.git/
+.venv/
+node_modules/
+frontend/.next/
+frontend/node_modules/
+__pycache__/
+*.pyc
+edge/cache/
+edge/data/
+.env
+.env.*
+!.env.example

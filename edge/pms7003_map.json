@@ -1,0 +1,6 @@
+{
+  "_comment": "TODO: replace device with the real serial port the PMS7003's TX/RX/GND is wired to (check `ls /dev/tty*` before/after plugging in, or the fixed UART port if wired to the Pi's GPIO14/15). These sensor_ids match seed/seed.py's SENSORS list - all three point at the same physical unit, so they share one device value once it's filled in.",
+  "pm1_0": { "device": "/dev/ttyAMA0", "metric": "pm1_0" },
+  "pm2_5": { "device": "/dev/ttyAMA0", "metric": "pm2_5" },
+  "pm10": { "device": "/dev/ttyAMA0", "metric": "pm10" }
+}
