@@ -6,12 +6,16 @@ automatically alongside the daemon's other tasks and is reachable at
 http://<pi-ip>:8080 (or http://localhost:8080 on the Pi's own screen, via
 Raspberry Pi Connect's Screen Sharing) from the moment the container is up.
 
+Routes: `/` (the live table), `/api/latest` (JSON backing it),
+`/api/history/<sensor_id>?limit=N` (recent readings for one sensor), and
+`/api/export` (every retained row, as a one-click file download).
+
 Implemented with a hand-rolled asyncio HTTP server (stdlib `asyncio.
 start_server` only) rather than pulling in FastAPI/aiohttp - edge/
 requirements.txt is deliberately kept small (see its own docstring) since
-this whole image only exists to run on the Pi; a debugging page for three
-routes doesn't justify a new dependency. Only GET is supported, which is
-all a read-only dashboard needs.
+this whole image only exists to run on the Pi; a handful of read-only
+debugging routes doesn't justify a new dependency. Only GET is supported,
+which is all a read-only dashboard needs.
 """
 from __future__ import annotations
 
@@ -19,6 +23,7 @@ import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING
+from urllib.parse import unquote, urlsplit
 
 if TYPE_CHECKING:
     from edge.daemon import Context
@@ -52,12 +57,15 @@ _PAGE = """<!doctype html>
   .src { font-size: 10px; padding: 1px 5px; border-radius: 8px; margin-left: 6px; }
   .src.mock { background: #7d2d1a; color: #ffdcd1; }
   .src.real { background: #1f6f43; color: #d1f7e0; }
+  #export-btn { display: inline-block; margin-bottom: 12px; padding: 8px 14px; background: #238636; color: #fff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600; }
+  #export-btn:hover { background: #2ea043; }
 </style>
 </head>
 <body>
 <h1>Airthra Edge - Local Debug View</h1>
 <div class="sub" id="plant"></div>
 <div id="source-banner"></div>
+<a id="export-btn" href="/api/export" download="airthra_readings_export.json">Download full history (JSON)</a>
 <div id="status">connecting...</div>
 <table>
   <thead><tr><th>Sensor</th><th>Value</th><th>Status</th><th>Source</th><th>Last update</th></tr></thead>
@@ -113,11 +121,12 @@ setInterval(refresh, 1000);
 """
 
 
-def _http_response(status: str, content_type: str, body: bytes) -> bytes:
+def _http_response(status: str, content_type: str, body: bytes, extra_headers: str = "") -> bytes:
     headers = (
         f"HTTP/1.1 {status}\r\n"
         f"Content-Type: {content_type}\r\n"
         f"Content-Length: {len(body)}\r\n"
+        f"{extra_headers}"
         "Connection: close\r\n"
         "\r\n"
     ).encode("ascii")
@@ -135,7 +144,10 @@ async def _handle_client(ctx: "Context", reader: asyncio.StreamReader, writer: a
                 break
 
         parts = request_line.decode("latin-1").split()
-        path = parts[1] if len(parts) >= 2 else "/"
+        raw_path = parts[1] if len(parts) >= 2 else "/"
+        split = urlsplit(raw_path)
+        path = unquote(split.path)
+        query = dict(pair.split("=", 1) for pair in split.query.split("&") if "=" in pair)
 
         if path == "/" or path == "/index.html":
             writer.write(_http_response("200 OK", "text/html; charset=utf-8", _PAGE.encode("utf-8")))
@@ -149,6 +161,33 @@ async def _handle_client(ctx: "Context", reader: asyncio.StreamReader, writer: a
                 }
             ).encode("utf-8")
             writer.write(_http_response("200 OK", "application/json", body))
+        elif path.startswith("/api/history/"):
+            sensor_id = path[len("/api/history/"):]
+            try:
+                limit = max(1, min(int(query.get("limit", "200")), 10_000))
+            except ValueError:
+                limit = 200
+            body = json.dumps(
+                {"sensor_id": sensor_id, "readings": await ctx.local_store.history(sensor_id, limit)}
+            ).encode("utf-8")
+            writer.write(_http_response("200 OK", "application/json", body))
+        elif path == "/api/export":
+            # Everything currently retained (bounded by LOCAL_RETENTION_DAYS,
+            # never unbounded) - the one-click "download it all" button.
+            # Content-Disposition makes the browser save it as a file
+            # instead of just displaying it inline; the <a download> on the
+            # button is a redundant hint for the same behaviour.
+            body = json.dumps(
+                {"plant_id": ctx.cfg.plant_id, "readings": await ctx.local_store.export_all()}
+            ).encode("utf-8")
+            writer.write(
+                _http_response(
+                    "200 OK",
+                    "application/json",
+                    body,
+                    extra_headers='Content-Disposition: attachment; filename="airthra_readings_export.json"\r\n',
+                )
+            )
         else:
             writer.write(_http_response("404 Not Found", "text/plain", b"not found"))
         await writer.drain()

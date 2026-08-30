@@ -121,13 +121,39 @@ class LocalReadingsStore:
         recently" without any cloud/network dependency at all."""
         assert self._conn is not None
         cursor = await self._conn.execute(
-            "SELECT ts, value, quality_flag FROM local_readings "
+            "SELECT ts, value, quality_flag, source FROM local_readings "
             "WHERE sensor_id = ? ORDER BY id DESC LIMIT ?",
             (sensor_id, limit),
         )
         rows = await cursor.fetchall()
         await cursor.close()
-        return [{"ts": row[0], "value": row[1], "quality_flag": row[2]} for row in rows]
+        return [
+            {"ts": row[0], "value": row[1], "quality_flag": row[2], "source": row[3]}
+            for row in rows
+        ]
+
+    async def export_all(self) -> List[Dict]:
+        """Every row currently retained (bounded by retention_days, so this
+        is never unbounded), oldest first - backs the dashboard's one-click
+        "download everything currently stored on this Pi" button."""
+        assert self._conn is not None
+        cursor = await self._conn.execute(
+            "SELECT plant_id, sensor_id, ts, value, quality_flag, source "
+            "FROM local_readings ORDER BY id ASC"
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+        return [
+            {
+                "plant_id": row[0],
+                "sensor_id": row[1],
+                "ts": row[2],
+                "value": row[3],
+                "quality_flag": row[4],
+                "source": row[5],
+            }
+            for row in rows
+        ]
 
     async def count(self) -> int:
         assert self._conn is not None
