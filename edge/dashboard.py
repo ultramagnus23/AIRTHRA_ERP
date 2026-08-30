@@ -57,15 +57,24 @@ _PAGE = """<!doctype html>
   .src { font-size: 10px; padding: 1px 5px; border-radius: 8px; margin-left: 6px; }
   .src.mock { background: #7d2d1a; color: #ffdcd1; }
   .src.real { background: #1f6f43; color: #d1f7e0; }
-  #export-btn { display: inline-block; margin-bottom: 12px; padding: 8px 14px; background: #238636; color: #fff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600; }
+  #export-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; padding: 10px 12px; background: #161b22; border: 1px solid #21262d; border-radius: 8px; }
+  #export-panel label { font-size: 12px; color: #8b949e; display: flex; flex-direction: column; gap: 3px; }
+  #export-panel input[type="datetime-local"] { background: #0b0f14; color: #e6edf3; border: 1px solid #30363d; border-radius: 4px; padding: 4px 6px; font-size: 12px; }
+  #export-btn { display: inline-block; padding: 8px 14px; background: #238636; color: #fff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; align-self: flex-end; }
   #export-btn:hover { background: #2ea043; }
+  #export-clear { background: none; border: none; color: #8b949e; font-size: 12px; text-decoration: underline; cursor: pointer; align-self: flex-end; padding: 8px 0; }
 </style>
 </head>
 <body>
 <h1>Airthra Edge - Local Debug View</h1>
 <div class="sub" id="plant"></div>
 <div id="source-banner"></div>
-<a id="export-btn" href="/api/export" download="airthra_readings_export.json">Download full history (JSON)</a>
+<div id="export-panel">
+  <label>From <input type="datetime-local" id="export-from"></label>
+  <label>To <input type="datetime-local" id="export-to"></label>
+  <a id="export-btn" href="/api/export" download="airthra_readings_export.json">Download history (JSON)</a>
+  <button id="export-clear" type="button">clear range (download everything)</button>
+</div>
 <div id="status">connecting...</div>
 <table>
   <thead><tr><th>Sensor</th><th>Value</th><th>Status</th><th>Source</th><th>Last update</th></tr></thead>
@@ -115,6 +124,32 @@ async function refresh() {
 }
 refresh();
 setInterval(refresh, 1000);
+
+// Date-range picker for the export button - rebuilds its href from the
+// two datetime-local inputs whenever either changes, so the browser's
+// native "download" behaviour (triggered by the <a download> attribute)
+// still works with no page reload or form submit needed.
+const exportBtn = document.getElementById("export-btn");
+const fromInput = document.getElementById("export-from");
+const toInput = document.getElementById("export-to");
+
+function updateExportHref() {
+  const params = new URLSearchParams();
+  // datetime-local gives local time with no timezone suffix - appending
+  // one makes it parse as a real instant rather than being silently
+  // interpreted as UTC or the server's zone.
+  if (fromInput.value) params.set("from", new Date(fromInput.value).toISOString());
+  if (toInput.value) params.set("to", new Date(toInput.value).toISOString());
+  const qs = params.toString();
+  exportBtn.href = "/api/export" + (qs ? "?" + qs : "");
+}
+fromInput.addEventListener("change", updateExportHref);
+toInput.addEventListener("change", updateExportHref);
+document.getElementById("export-clear").addEventListener("click", () => {
+  fromInput.value = "";
+  toInput.value = "";
+  updateExportHref();
+});
 </script>
 </body>
 </html>
@@ -147,7 +182,10 @@ async def _handle_client(ctx: "Context", reader: asyncio.StreamReader, writer: a
         raw_path = parts[1] if len(parts) >= 2 else "/"
         split = urlsplit(raw_path)
         path = unquote(split.path)
-        query = dict(pair.split("=", 1) for pair in split.query.split("&") if "=" in pair)
+        query = {
+            unquote(k): unquote(v)
+            for k, v in (pair.split("=", 1) for pair in split.query.split("&") if "=" in pair)
+        }
 
         if path == "/" or path == "/index.html":
             writer.write(_http_response("200 OK", "text/html; charset=utf-8", _PAGE.encode("utf-8")))
@@ -173,12 +211,20 @@ async def _handle_client(ctx: "Context", reader: asyncio.StreamReader, writer: a
             writer.write(_http_response("200 OK", "application/json", body))
         elif path == "/api/export":
             # Everything currently retained (bounded by LOCAL_RETENTION_DAYS,
-            # never unbounded) - the one-click "download it all" button.
-            # Content-Disposition makes the browser save it as a file
-            # instead of just displaying it inline; the <a download> on the
-            # button is a redundant hint for the same behaviour.
+            # never unbounded) by default, or a specific ?from=&to= window -
+            # the dashboard's "download history" button, with an optional
+            # date-range picker. Content-Disposition makes the browser save
+            # it as a file instead of just displaying it inline; the
+            # <a download> on the button is a redundant hint for the same
+            # behaviour.
+            start = query.get("from") or None
+            end = query.get("to") or None
             body = json.dumps(
-                {"plant_id": ctx.cfg.plant_id, "readings": await ctx.local_store.export_all()}
+                {
+                    "plant_id": ctx.cfg.plant_id,
+                    "range": {"from": start, "to": end},
+                    "readings": await ctx.local_store.export_all(start, end),
+                }
             ).encode("utf-8")
             writer.write(
                 _http_response(

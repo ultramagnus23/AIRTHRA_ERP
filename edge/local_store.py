@@ -132,14 +132,26 @@ class LocalReadingsStore:
             for row in rows
         ]
 
-    async def export_all(self) -> List[Dict]:
-        """Every row currently retained (bounded by retention_days, so this
-        is never unbounded), oldest first - backs the dashboard's one-click
-        "download everything currently stored on this Pi" button."""
+    async def export_all(self, start: Optional[str] = None, end: Optional[str] = None) -> List[Dict]:
+        """Rows currently retained (bounded by retention_days, so this is
+        never unbounded regardless of range), oldest first - backs the
+        dashboard's "download history" button. start/end are ISO timestamp
+        strings (inclusive/exclusive respectively); either or both may be
+        omitted to leave that side of the range open."""
         assert self._conn is not None
+        clauses = []
+        params: List[str] = []
+        if start:
+            clauses.append("ts >= ?")
+            params.append(start)
+        if end:
+            clauses.append("ts <= ?")
+            params.append(end)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         cursor = await self._conn.execute(
-            "SELECT plant_id, sensor_id, ts, value, quality_flag, source "
-            "FROM local_readings ORDER BY id ASC"
+            f"SELECT plant_id, sensor_id, ts, value, quality_flag, source "
+            f"FROM local_readings {where} ORDER BY id ASC",
+            params,
         )
         rows = await cursor.fetchall()
         await cursor.close()
