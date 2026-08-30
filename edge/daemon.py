@@ -198,6 +198,11 @@ async def _poll_once(ctx: Context, sensor_source, setpoint_source: MockSetpointS
             "ts": ts_iso,
             "value": value,
             "quality_flag": flag,
+            # 'mock' or 'real' - see edge/local_store.py's schema comment.
+            # Harmless extra key on the MQTT/cloud path: ingest/service.py's
+            # validate_reading() and its INSERT both only look at the 5
+            # fields above, so this rides along without affecting them.
+            "source": "mock" if cfg.mock else "real",
         }
         ctx.outbox.put_nowait(("reading", reading))
         ctx.readings_generated_total += 1

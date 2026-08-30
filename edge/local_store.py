@@ -32,7 +32,12 @@ CREATE TABLE IF NOT EXISTS local_readings (
     sensor_id     TEXT NOT NULL,
     ts            TEXT NOT NULL,
     value         REAL,
-    quality_flag  INTEGER NOT NULL
+    quality_flag  INTEGER NOT NULL,
+    -- 'mock' (edge/mockgen.py's simulator) or 'real' (an actual poller
+    -- reading physical hardware) - see daemon.py's _poll_once(), which
+    -- sets this from cfg.mock. Exists so nobody has to guess, from the
+    -- dashboard, whether what they're looking at is simulated or real.
+    source        TEXT NOT NULL DEFAULT 'real'
 );
 CREATE INDEX IF NOT EXISTS idx_local_readings_ts ON local_readings(ts);
 CREATE INDEX IF NOT EXISTS idx_local_readings_sensor ON local_readings(sensor_id, id);
@@ -51,6 +56,17 @@ class LocalReadingsStore:
         await self._conn.execute("PRAGMA synchronous=NORMAL;")
         await self._conn.executescript(_SCHEMA)
         await self._conn.commit()
+        # Migration for DBs created before the `source` column existed -
+        # CREATE TABLE IF NOT EXISTS above is a no-op on an already-existing
+        # table, so an ALTER is needed to backfill it on those files.
+        cursor = await self._conn.execute("PRAGMA table_info(local_readings)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        await cursor.close()
+        if "source" not in columns:
+            await self._conn.execute(
+                "ALTER TABLE local_readings ADD COLUMN source TEXT NOT NULL DEFAULT 'real'"
+            )
+            await self._conn.commit()
 
     async def close(self) -> None:
         if self._conn is not None:
@@ -58,15 +74,16 @@ class LocalReadingsStore:
             self._conn = None
 
     async def insert_many(self, readings: List[dict]) -> None:
-        """readings: list of {plant_id, sensor_id, ts, value, quality_flag}
-        dicts - the exact same shape _poll_once() already builds for the
-        MQTT outbox, so the caller doesn't need to build anything new."""
+        """readings: list of {plant_id, sensor_id, ts, value, quality_flag,
+        source} dicts - the exact same shape _poll_once() already builds
+        for the MQTT outbox, so the caller doesn't need to build anything
+        new."""
         if not readings:
             return
         assert self._conn is not None
         await self._conn.executemany(
-            "INSERT INTO local_readings (plant_id, sensor_id, ts, value, quality_flag) "
-            "VALUES (:plant_id, :sensor_id, :ts, :value, :quality_flag)",
+            "INSERT INTO local_readings (plant_id, sensor_id, ts, value, quality_flag, source) "
+            "VALUES (:plant_id, :sensor_id, :ts, :value, :quality_flag, :source)",
             readings,
         )
         # Prune every insert batch (every poll cycle, ~1s) rather than on a
@@ -83,7 +100,7 @@ class LocalReadingsStore:
         assert self._conn is not None
         cursor = await self._conn.execute(
             """
-            SELECT r.sensor_id, r.ts, r.value, r.quality_flag
+            SELECT r.sensor_id, r.ts, r.value, r.quality_flag, r.source
             FROM local_readings r
             INNER JOIN (
                 SELECT sensor_id, MAX(id) AS max_id FROM local_readings GROUP BY sensor_id
@@ -94,7 +111,7 @@ class LocalReadingsStore:
         rows = await cursor.fetchall()
         await cursor.close()
         return [
-            {"sensor_id": row[0], "ts": row[1], "value": row[2], "quality_flag": row[3]}
+            {"sensor_id": row[0], "ts": row[1], "value": row[2], "quality_flag": row[3], "source": row[4]}
             for row in rows
         ]
 

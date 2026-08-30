@@ -46,14 +46,21 @@ _PAGE = """<!doctype html>
   #status { font-size: 13px; margin-bottom: 10px; }
   #status.ok { color: #3fb950; }
   #status.stale { color: #f0883e; }
+  #source-banner { font-size: 14px; font-weight: 700; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; display: none; }
+  #source-banner.mock { display: block; background: #7d2d1a; color: #ffdcd1; }
+  #source-banner.real { display: block; background: #1f6f43; color: #d1f7e0; }
+  .src { font-size: 10px; padding: 1px 5px; border-radius: 8px; margin-left: 6px; }
+  .src.mock { background: #7d2d1a; color: #ffdcd1; }
+  .src.real { background: #1f6f43; color: #d1f7e0; }
 </style>
 </head>
 <body>
 <h1>Airthra Edge - Local Debug View</h1>
 <div class="sub" id="plant"></div>
+<div id="source-banner"></div>
 <div id="status">connecting...</div>
 <table>
-  <thead><tr><th>Sensor</th><th>Value</th><th>Status</th><th>Last update</th></tr></thead>
+  <thead><tr><th>Sensor</th><th>Value</th><th>Status</th><th>Source</th><th>Last update</th></tr></thead>
   <tbody id="rows"></tbody>
 </table>
 <script>
@@ -63,6 +70,19 @@ async function refresh() {
     const res = await fetch("/api/latest");
     const data = await res.json();
     document.getElementById("plant").textContent = "plant: " + data.plant_id + "  |  local rows stored: " + data.local_row_count;
+
+    const banner = document.getElementById("source-banner");
+    const anyMock = data.readings.some(r => r.source === "mock");
+    if (anyMock) {
+      banner.textContent = "SIMULATED DATA - this daemon is running with --mock. These are NOT real sensor readings.";
+      banner.className = "mock";
+    } else if (data.readings.length > 0) {
+      banner.textContent = "REAL SENSOR DATA - reading actual connected hardware.";
+      banner.className = "real";
+    } else {
+      banner.className = "";
+    }
+
     const rows = data.readings.map(r => {
       const label = FLAG_LABEL[r.quality_flag] || "unknown";
       const ageS = (Date.now() - new Date(r.ts).getTime()) / 1000;
@@ -71,6 +91,7 @@ async function refresh() {
         <td>${r.sensor_id}</td>
         <td class="value">${r.value === null ? "-" : Number(r.value).toFixed(3)}</td>
         <td><span class="flag ${label}">${label}</span></td>
+        <td><span class="src ${r.source}">${r.source}</span></td>
         <td>${ageS.toFixed(1)}s ago</td>
       </tr>`;
     }).join("");
