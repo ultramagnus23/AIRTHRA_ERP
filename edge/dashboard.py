@@ -7,8 +7,10 @@ http://<pi-ip>:8080 (or http://localhost:8080 on the Pi's own screen, via
 Raspberry Pi Connect's Screen Sharing) from the moment the container is up.
 
 Routes: `/` (the live table), `/api/latest` (JSON backing it),
-`/api/history/<sensor_id>?limit=N` (recent readings for one sensor), and
-`/api/export` (every retained row, as a one-click file download).
+`/api/history/<sensor_id>?limit=N` (recent readings for one sensor),
+`/api/export` (every retained row, or a `?from=&to=` window, as a
+one-click file download), and `/api/export/count` (a cheap row-count/
+size-estimate for that same range, used to warn before a big download).
 
 Implemented with a hand-rolled asyncio HTTP server (stdlib `asyncio.
 start_server` only) rather than pulling in FastAPI/aiohttp - edge/
@@ -29,6 +31,12 @@ if TYPE_CHECKING:
     from edge.daemon import Context
 
 logger = logging.getLogger("edge.dashboard")
+
+# Empirically measured (json.dumps output for one reading row, compact
+# separators, no indent - see export_all()'s shape) rather than computed
+# exactly, since computing it exactly would mean building the export just
+# to measure it - the entire point of this estimate is to avoid that.
+_AVG_BYTES_PER_ROW = 165
 
 _PAGE = """<!doctype html>
 <html>
@@ -63,6 +71,9 @@ _PAGE = """<!doctype html>
   #export-btn { display: inline-block; padding: 8px 14px; background: #238636; color: #fff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; align-self: flex-end; }
   #export-btn:hover { background: #2ea043; }
   #export-clear { background: none; border: none; color: #8b949e; font-size: 12px; text-decoration: underline; cursor: pointer; align-self: flex-end; padding: 8px 0; }
+  #export-size { width: 100%; font-size: 12px; color: #8b949e; }
+  #export-size.warn { color: #f0883e; font-weight: 600; }
+  #export-size.danger { color: #f85149; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -74,6 +85,7 @@ _PAGE = """<!doctype html>
   <label>To <input type="datetime-local" id="export-to"></label>
   <a id="export-btn" href="/api/export" download="airthra_readings_export.json">Download history (JSON)</a>
   <button id="export-clear" type="button">clear range (download everything)</button>
+  <div id="export-size">checking size...</div>
 </div>
 <div id="status">connecting...</div>
 <table>
@@ -133,23 +145,59 @@ const exportBtn = document.getElementById("export-btn");
 const fromInput = document.getElementById("export-from");
 const toInput = document.getElementById("export-to");
 
-function updateExportHref() {
+function currentRangeParams() {
   const params = new URLSearchParams();
   // datetime-local gives local time with no timezone suffix - appending
   // one makes it parse as a real instant rather than being silently
   // interpreted as UTC or the server's zone.
   if (fromInput.value) params.set("from", new Date(fromInput.value).toISOString());
   if (toInput.value) params.set("to", new Date(toInput.value).toISOString());
-  const qs = params.toString();
+  return params;
+}
+
+function updateExportHref() {
+  const qs = currentRangeParams().toString();
   exportBtn.href = "/api/export" + (qs ? "?" + qs : "");
 }
-fromInput.addEventListener("change", updateExportHref);
-toInput.addEventListener("change", updateExportHref);
+
+function formatBytes(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(0) + " KB";
+  return (n / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+// Cheap COUNT-based estimate (edge/dashboard.py's /api/export/count) so
+// the size is known BEFORE clicking download, not discovered mid-transfer
+// on a slow remote connection.
+async function updateExportSize() {
+  const sizeEl = document.getElementById("export-size");
+  try {
+    const qs = currentRangeParams().toString();
+    const res = await fetch("/api/export/count" + (qs ? "?" + qs : ""));
+    const data = await res.json();
+    const mb = data.estimated_bytes / (1024 * 1024);
+    sizeEl.textContent = data.count.toLocaleString() + " readings, ~" + formatBytes(data.estimated_bytes) + " estimated";
+    sizeEl.className = mb > 100 ? "danger" : mb > 20 ? "warn" : "";
+    if (mb > 20) {
+      sizeEl.textContent += mb > 100
+        ? " - this is a large download, likely slow on a remote/mobile connection. Pick a narrower time range if possible."
+        : " - noticeable on a slow connection; a narrower range downloads faster.";
+    }
+  } catch (e) {
+    sizeEl.textContent = "";
+  }
+}
+
+fromInput.addEventListener("change", () => { updateExportHref(); updateExportSize(); });
+toInput.addEventListener("change", () => { updateExportHref(); updateExportSize(); });
 document.getElementById("export-clear").addEventListener("click", () => {
   fromInput.value = "";
   toInput.value = "";
   updateExportHref();
+  updateExportSize();
 });
+updateExportSize();
+setInterval(updateExportSize, 5000);
 </script>
 </body>
 </html>
@@ -208,6 +256,16 @@ async def _handle_client(ctx: "Context", reader: asyncio.StreamReader, writer: a
             body = json.dumps(
                 {"sensor_id": sensor_id, "readings": await ctx.local_store.history(sensor_id, limit)}
             ).encode("utf-8")
+            writer.write(_http_response("200 OK", "application/json", body))
+        elif path == "/api/export/count":
+            # Cheap (indexed COUNT, no row data built or transferred) - lets
+            # the dashboard show an estimated download size before the
+            # button is actually clicked, so a multi-hundred-MB export
+            # doesn't come as a surprise on a slow/remote connection.
+            start = query.get("from") or None
+            end = query.get("to") or None
+            count = await ctx.local_store.count_range(start, end)
+            body = json.dumps({"count": count, "estimated_bytes": count * _AVG_BYTES_PER_ROW}).encode("utf-8")
             writer.write(_http_response("200 OK", "application/json", body))
         elif path == "/api/export":
             # Everything currently retained (bounded by LOCAL_RETENTION_DAYS,

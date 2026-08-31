@@ -132,6 +132,25 @@ class LocalReadingsStore:
             for row in rows
         ]
 
+    async def count_range(self, start: Optional[str] = None, end: Optional[str] = None) -> int:
+        """Same filtering as export_all(), but just the row count - lets
+        the dashboard show "this download is ~N readings / ~M MB" before
+        actually building and transferring the full export."""
+        assert self._conn is not None
+        clauses = []
+        params: List[str] = []
+        if start:
+            clauses.append("ts >= ?")
+            params.append(start)
+        if end:
+            clauses.append("ts <= ?")
+            params.append(end)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        cursor = await self._conn.execute(f"SELECT COUNT(*) FROM local_readings {where}", params)
+        row = await cursor.fetchone()
+        await cursor.close()
+        return int(row[0]) if row else 0
+
     async def export_all(self, start: Optional[str] = None, end: Optional[str] = None) -> List[Dict]:
         """Rows currently retained (bounded by retention_days, so this is
         never unbounded regardless of range), oldest first - backs the
