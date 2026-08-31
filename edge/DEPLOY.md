@@ -240,9 +240,15 @@ itself.
 ## 7. Run for real
 
 ```bash
-docker compose -f docker-compose.pi.yml up -d
+docker compose -f docker-compose.pi.yml up -d --build
 docker compose -f docker-compose.pi.yml logs -f
 ```
+
+`--build` rebuilds from `edge/Dockerfile` first (the compose file's
+`build:` block points at it) - no separate manual `docker build` step
+needed at this point, unlike step 3's Option B, which still needs the
+bare `docker build` command since no compose file/`.env.pi` exist yet
+that early.
 
 `restart: unless-stopped` in `docker-compose.pi.yml` means it comes back
 up automatically after a Pi reboot or crash. The daemon's own watchdog
@@ -254,12 +260,15 @@ container that's alive but stuck (bad clock, full disk, backed-up queue).
 
 ## 8. Updating the code later
 
-Rebuild (Option A or B from step 3) with a new tag, then:
-
 ```bash
-docker compose -f docker-compose.pi.yml pull   # if using a registry
-docker compose -f docker-compose.pi.yml up -d  # recreates the container on the new image
+git pull
+docker compose -f docker-compose.pi.yml up -d --build
 ```
+
+One step: `--build` picks up the new code and recreates the container on
+it. (If you cross-built and pushed to a registry instead per step 3's
+Option A, `docker compose -f docker-compose.pi.yml pull` first, then
+`up -d` without `--build`.)
 
 `edge_cache`/`edge_data` are named volumes, not part of the image, so the
 SQLite offline buffer and manifest cache survive this untouched.
