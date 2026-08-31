@@ -4,10 +4,20 @@
 # for the full walkthrough.
 #
 # Usage on the Pi:
-#   docker compose -f docker-compose.pi.yml up -d
+#   git pull
+#   docker compose -f docker-compose.pi.yml up -d --build
 #   docker compose -f docker-compose.pi.yml logs -f
+#
+# --build now actually does something: without a `build:` block, compose's
+# --build flag is a silent no-op for a service that only has `image:` - it
+# just reuses whatever's already tagged, even if it's stale. This runs
+# from a `git pull` on latest code every time, no separate manual
+# `docker build -f edge/Dockerfile ...` step needed first.
 services:
   edge:
+    build:
+      context: .
+      dockerfile: edge/Dockerfile
     image: airthra-edge:latest
     container_name: airthra_edge
     restart: unless-stopped
