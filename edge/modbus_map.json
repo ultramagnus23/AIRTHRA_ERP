@@ -1,11 +1,12 @@
 {
   "_comment": "TODO: fill in real bus/slave_id/register values - these sensor_ids match seed/seed.py's SENSORS list and the `sensors` table, but the wiring fields below (bus, slave_id, register) are placeholders and MUST be replaced from each Modbus device's datasheet/DIP-switch config before use. bus is /dev/ttyUSB0 or /dev/ttyUSB1 per the two RS-485 adapters. See edge/mockgen.py ModbusRegisterMap for field meanings.",
   "_comment_scope": "Only sensors with interface='modbus' in the `sensors` table belong in this file - the 15 DS18B20 probes (interface='onewire') and PMS7003 PM channels (interface='pms7003') live in edge/onewire_map.json and edge/pms7003_map.json instead. Do not duplicate them here: CompositeSensorSource (edge/mockgen.py) requires each sensor_id be claimed by exactly one map/poller and raises at startup if two claim the same id.",
-  "_comment_relay_module": "TODO: the 12V Modbus relay module (damper + solenoid control, per the BOM) is not represented in seed/seed.py's SENSORS list or here yet. It's unclear whether it exposes Modbus-readable status/feedback registers (vs. write-only coils with no readback) - confirm from its datasheet, then add sensor_id(s) to seed/seed.py with interface='modbus' and a matching entry here. Do not invent register numbers or tag names before that's confirmed - a fabricated placeholder here would be silently 'plausible' in a way a real safety-relevant device (damper interlock) shouldn't be.",
-  "_comment_o2": "The ASAIR AO-03 O2 sensor's own datasheet (aosong.com) confirms it is a raw analog current output (0.1mA in air, linear 1-25% Vol O2 across a 100 ohm load resistor) - NOT a digital interface. It reads through a channel of the Waveshare 8-channel analog module on the RS-485 bus, which is itself the Modbus slave - hence interface='modbus' in seed/seed.py even though the O2 cell itself has no protocol. slave_id/register below are STILL placeholders: they need the Waveshare module's own register map (separate datasheet, not yet available) to know which holding register that analog channel lands on.",
+  "_comment_relay_module": "The 12V Modbus relay module (damper + solenoid control, per the BOM) is now physically address-set to slave ID 0x02 (2) - see test_real_pollers.py's ping check, which verifies it responds on the bus. It's still NOT in seed/seed.py's SENSORS list or here as a polled sensor yet: whether it exposes Modbus-readable status/feedback registers (vs. write-only coils with no readback) is still unconfirmed from its datasheet. Do not invent register numbers or tag names before that's confirmed - a fabricated placeholder here would be silently 'plausible' in a way a real safety-relevant device (damper interlock) shouldn't be.",
+  "_comment_o2": "The ASAIR AO-03 O2 sensor's own datasheet (aosong.com) confirms it is a raw analog current output (0.1mA in air, linear 1-25% Vol O2 across a 100 ohm load resistor) - NOT a digital interface. It reads through a channel of the Waveshare 8-channel analog module on the RS-485 bus, which is itself the Modbus slave - hence interface='modbus' in seed/seed.py even though the O2 cell itself has no protocol. slave_id below (0x01) is now the real, physically-set address of that Waveshare module. register is STILL a placeholder: it needs the Waveshare module's own register map (separate datasheet, not yet available) to know which holding register that analog channel lands on.",
+  "_comment_slave_ids": "SO2_in/SO2_out/o2_pct's slave_id values below are now real, physically-set addresses (Sangbay SO2 High=0x03, Sangbay SO2 Low=0x04, Waveshare analog module=0x01) - confirmed 2026-09-06. register/bus are STILL placeholders: bus (which of the two RS-485 adapters) hasn't been confirmed for these three specifically, and register needs each device's datasheet.",
   "SO2_in": {
     "bus": "/dev/ttyUSB0",
-    "slave_id": 0,
+    "slave_id": 3,
     "register": 0,
     "register_type": "holding",
     "count": 1,
@@ -16,7 +17,7 @@
   },
   "SO2_out": {
     "bus": "/dev/ttyUSB0",
-    "slave_id": 0,
+    "slave_id": 4,
     "register": 0,
     "register_type": "holding",
     "count": 1,
@@ -82,7 +83,7 @@
   },
   "o2_pct": {
     "bus": "/dev/ttyUSB0",
-    "slave_id": 0,
+    "slave_id": 1,
     "register": 0,
     "register_type": "holding",
     "count": 1,

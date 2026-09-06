@@ -47,6 +47,20 @@ _STATUS_LABELS = {
     q.FROZEN: "FROZEN/STUCK",
 }
 
+# Devices confirmed by physical DIP-switch/config address as of 2026-09-06 -
+# not sensors in the manifest (the relay module isn't one at all), so they
+# need their own reachability check independent of modbus_map.json/the
+# sensor-based flow above. "Ping" here means: does ANYTHING answer at this
+# slave ID, on either RS-485 bus - not "is register X readable", since we
+# don't have register maps for any of these yet either.
+MODBUS_PING_TARGETS = [
+    ("Waveshare 8-Ch Analog Module", 0x01),
+    ("12V Modbus Relay Module", 0x02),
+    ("Sangbay SO2 (High)", 0x03),
+    ("Sangbay SO2 (Low)", 0x04),
+]
+MODBUS_PING_BUSES = ["/dev/ttyUSB0", "/dev/ttyUSB1"]
+
 
 def _load_map_or_empty(loader, path: Path, label: str) -> dict:
     if not path.exists():
@@ -57,6 +71,60 @@ def _load_map_or_empty(loader, path: Path, label: str) -> dict:
     except Exception as exc:  # noqa: BLE001 - report and continue, don't abort the whole run
         print(f"  ! {label} map at {path} failed to parse: {exc}")
         return {}
+
+
+async def _ping_slave_on_bus(bus: str, slave_id: int, timeout: float) -> str:
+    """Tries a minimal read (holding register 0) against one slave_id on
+    one bus. Returns one of: "found" (got real data back - device present
+    AND register 0 happens to be defined), "found (no reg 0)" (the bus
+    round-trip completed and the device sent back a Modbus exception
+    response, e.g. illegal data address - the device IS there and
+    answering, it just doesn't have anything at register 0, which is
+    expected since we don't have real register maps yet), or "no response"
+    (timeout/connect failure - nothing at this address on this bus)."""
+    client = None
+    try:
+        # Constructing the client (not just connecting) can itself raise -
+        # e.g. pyserial missing, or an obviously malformed port string -
+        # so it has to be inside the try, not before it, or exactly the
+        # kind of environment problem this ping is meant to surface
+        # gracefully instead crashes the whole script.
+        from pymodbus.client import AsyncModbusSerialClient
+
+        client = AsyncModbusSerialClient(bus, baudrate=9600, timeout=timeout)
+        connected = await asyncio.wait_for(client.connect(), timeout=timeout)
+        if not connected:
+            return "no response"
+        result = await asyncio.wait_for(
+            client.read_holding_registers(0, count=1, slave=slave_id), timeout=timeout
+        )
+        if result.isError():
+            # A real Modbus exception response (e.g. illegal data address)
+            # still means something answered - that's a meaningfully
+            # different outcome from silence, hence the separate label.
+            return "found (no reg 0)"
+        return "found"
+    except Exception:
+        return "no response"
+    finally:
+        if client is not None:
+            client.close()
+
+
+async def ping_modbus_devices(timeout: float) -> None:
+    print("Pinging fixed-address Modbus devices (both buses, register 0 as a probe) ...")
+    print(f"{'device':<32} {'slave_id':<10} {'/dev/ttyUSB0':<16} {'/dev/ttyUSB1':<16}")
+    print("-" * 78)
+    for name, slave_id in MODBUS_PING_TARGETS:
+        row = [name, f"0x{slave_id:02X}"]
+        for bus in MODBUS_PING_BUSES:
+            row.append(await _ping_slave_on_bus(bus, slave_id, timeout))
+        found_on = [b for b, r in zip(MODBUS_PING_BUSES, row[2:]) if r.startswith("found")]
+        if len(found_on) > 1:
+            print(f"  ! {name}: responded on MORE THAN ONE bus ({found_on}) - check for a wiring "
+                  f"short between the two RS-485 buses, or a duplicate slave_id elsewhere.")
+        print(f"{row[0]:<32} {row[1]:<10} {row[2]:<16} {row[3]:<16}")
+    print()
 
 
 async def _read_with_timing(source, sensor_id: str, timeout: float):
@@ -72,6 +140,8 @@ async def _read_with_timing(source, sensor_id: str, timeout: float):
 
 async def main_async(plant_id: str, timeout: float) -> int:
     cfg = EdgeConfig(plant_id=plant_id, mock=False)
+
+    await ping_modbus_devices(timeout)
 
     print(f"Loading manifest for plant_id={plant_id!r} ...")
     sensors = load_manifest(plant_id, PostgresManifestSource(cfg.database_url), cfg.manifest_cache_path())
@@ -102,14 +172,15 @@ async def main_async(plant_id: str, timeout: float) -> int:
         poller = RealModbusPoller(modbus_sensors, modbus_map)
         for s in modbus_sensors:
             value, flag, error, elapsed = await _read_with_timing(poller, s.sensor_id, timeout)
-            results.append(("modbus", s, value, flag, error, elapsed))
+            physical = f"{modbus_map[s.sensor_id].bus} @0x{modbus_map[s.sensor_id].slave_id:02X}"
+            results.append(("modbus", physical, s, value, flag, error, elapsed))
         await poller.close()
 
     if onewire_sensors:
         poller = RealOneWirePoller(onewire_sensors, onewire_map)
         for s in onewire_sensors:
             value, flag, error, elapsed = await _read_with_timing(poller, s.sensor_id, timeout)
-            results.append(("onewire", s, value, flag, error, elapsed))
+            results.append(("onewire", poller.bus_for(s.sensor_id), s, value, flag, error, elapsed))
         await poller.close()
 
     if pms_sensors:
@@ -122,13 +193,14 @@ async def main_async(plant_id: str, timeout: float) -> int:
         await asyncio.sleep(min(timeout, 2.0))
         for s in pms_sensors:
             value, flag, error, elapsed = await _read_with_timing(poller, s.sensor_id, timeout)
-            results.append(("pms7003", s, value, flag, error, elapsed))
+            results.append(("pms7003", pms7003_map[s.sensor_id].device, s, value, flag, error, elapsed))
         await poller.close()
 
-    print(f"{'sensor_id':<20} {'bus':<9} {'status':<14} {'value':>10}   {'notes'}")
-    print("-" * 80)
+    print(f"{'sensor_id':<20} {'kind':<9} {'physical':<26} {'status':<14} {'value':>10}   {'notes'}")
+    print("-" * 106)
     good = 0
-    for bus, spec, value, flag, error, elapsed in results:
+    bus_tally: dict = {}  # onewire bus label -> [good, total] - fault isolation, at a glance
+    for kind, physical, spec, value, flag, error, elapsed in results:
         if error is not None:
             status, value_str, note = "EXCEPTION", "-", error
         else:
@@ -137,11 +209,24 @@ async def main_async(plant_id: str, timeout: float) -> int:
             note = f"{elapsed * 1000:.0f}ms"
             if status == "GOOD":
                 good += 1
-        print(f"{spec.sensor_id:<20} {bus:<9} {status:<14} {value_str:>10}   {note}")
+        print(f"{spec.sensor_id:<20} {kind:<9} {physical:<26} {status:<14} {value_str:>10}   {note}")
+        if kind == "onewire":
+            tally = bus_tally.setdefault(physical, [0, 0])
+            tally[1] += 1
+            if error is None and flag == q.GOOD:
+                tally[0] += 1
 
-    print("-" * 80)
+    print("-" * 106)
     print(f"{good}/{len(results)} sensor(s) read GOOD "
           f"({len(unconfirmed)} skipped as unconfirmed, {len(misconfigured)} wiring gap(s))")
+
+    if bus_tally:
+        print()
+        print("1-Wire bus summary (this is the point of the 3-bus split: a whole")
+        print("bus reading 0/N usually means that bus's wiring, not 15 dead probes):")
+        for bus, (bus_good, bus_total) in sorted(bus_tally.items()):
+            flag_note = "  <-- check this bus's wiring/pull-up resistor" if bus_good == 0 else ""
+            print(f"  {bus:<20} {bus_good}/{bus_total} good{flag_note}")
 
     # Non-zero exit whenever there's something a human should look at before
     # trusting a full daemon run, so this is CI/script-friendly.

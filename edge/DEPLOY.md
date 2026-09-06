@@ -76,33 +76,47 @@ whether the Pi can actually reach the broker/Postgres once it's running.
   Imager. 64-bit matters for Docker: Pi 4/5 should run `linux/arm64`
   images; an older Pi 3 / Zero 2 W on 32-bit OS needs `linux/arm/v7`
   instead (noted again in the build command below).
-- **Enable the 1-Wire interface** for the DS18B20 probes. Edit
-  `/boot/firmware/config.txt` (older OS versions: `/boot/config.txt`) and
-  add:
+- **Enable THREE independent 1-Wire buses** for the 15 DS18B20 probes -
+  not one. This plant deliberately splits them into 3 physically separate
+  buses (gas path / solvent loop / product & utility, 5 probes each) so a
+  probe shorted by acid takes out only its own group of 5, not all 15.
+  Edit `/boot/firmware/config.txt` (older OS versions: `/boot/config.txt`)
+  and add all three lines:
   ```
-  dtoverlay=w1-gpio
+  dtoverlay=w1-gpio,gpiopin=4
+  dtoverlay=w1-gpio,gpiopin=17
+  dtoverlay=w1-gpio,gpiopin=27
   ```
-  This uses GPIO4 by default, matching the plant BOM. Reboot after adding
-  it, then confirm probes are visible on the **host** (not yet in a
-  container):
+  Each needs its own 4.7kΩ pull-up resistor between that GPIO's data line
+  and 3.3V - three resistors total, one per bus, not one per probe. Reboot
+  after adding these, then confirm probes are visible on the **host** (not
+  yet in a container):
   ```bash
   ls /sys/bus/w1/devices
   ```
-  You should see one `28-...` entry per DS18B20 currently wired up, plus a
-  `w1_bus_master1` entry. If nothing but the bus master shows up, the
-  probes aren't wired correctly yet (or the overlay didn't load) - fix
-  this before going any further, since `edge/onewire_map.json` needs
-  these exact ROM ids.
-- **Enable the UART** for the PMS7003 if it's wired to the Pi's built-in
-  serial pins (GPIO14/15) rather than a USB-serial adapter: in
-  `raspi-config` → Interface Options → Serial Port, answer "No" to login
-  shell over serial and "Yes" to enable the serial hardware. The port is
-  then `/dev/serial0` (symlinked to `/dev/ttyAMA0` or `/dev/ttyS0`
-  depending on Pi model - check with `ls -l /dev/serial0`).
-- **Identify the RS-485 adapters**: plug in both SmartElex USB-to-RS485
-  converters, then `ls /dev/ttyUSB*` - note which is which (they can swap
-  order across reboots if unplugged/replugged; see the note in
-  `docker-compose.pi.yml`).
+  All three buses show up together in this one directory (Linux's 1-Wire
+  subsystem doesn't separate them here) - you should see one `28-...`
+  entry per DS18B20 currently wired up, plus three `w1_bus_masterN`
+  entries (one per GPIO). If only the bus masters show up with no `28-...`
+  entries, wiring/pull-ups need checking before going further, since
+  `edge/onewire_map.json` needs each probe's exact ROM id. There is no way
+  to tell from this listing alone which physical bus a given `28-...`
+  probe is on - that's tracked separately in `edge/onewire_map.json`'s
+  `bus` field (which you fill in based on which GPIO you were wiring to
+  when that ID first appeared), not derived automatically.
+- **Enable the UART for the SmartElex HMI touchscreen** - GPIO14/15 is
+  permanently dedicated to this screen on this plant, not the PMS7003 (see
+  below). In `raspi-config` → Interface Options → Serial Port, answer "No"
+  to login shell over serial and "Yes" to enable the serial hardware. The
+  port is then `/dev/serial0` (symlinked to `/dev/ttyAMA0` or `/dev/ttyS0`
+  depending on Pi model - check with `ls -l /dev/serial0`); this is
+  `HMI_PORT` in `.env.pi`.
+- **Identify the RS-485 adapters and the PMS7003's USB-TTL adapter**: plug
+  in both SmartElex USB-to-RS485 converters plus the PMS7003's own
+  USB-to-TTL adapter (it needs one now, since GPIO14/15 is taken by the
+  HMI screen above), then `ls /dev/ttyUSB*` - note which is which (USB
+  enumeration order can swap across reboots if adapters are ever
+  unplugged/replugged; see the note in `docker-compose.pi.yml`).
 
 ## 2. Install Docker on the Pi
 
@@ -228,7 +242,7 @@ docker run --rm -it \
   -v $(pwd)/edge/onewire_map.json:/app/edge/onewire_map.json:ro \
   -v $(pwd)/edge/pms7003_map.json:/app/edge/pms7003_map.json:ro \
   -v /sys/bus/w1/devices:/sys/bus/w1/devices:ro \
-  --device=/dev/ttyUSB0 --device=/dev/ttyUSB1 --device=/dev/ttyAMA0 \
+  --device=/dev/ttyUSB0 --device=/dev/ttyUSB1 --device=/dev/ttyUSB2 \
   --entrypoint python \
   airthra-edge:latest edge/test_real_pollers.py --plant-id goa_pilot_01
 ```
