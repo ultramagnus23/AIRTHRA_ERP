@@ -24,6 +24,9 @@ Single asyncio process, five concurrent tasks:
                reads straight off the local store above. This is what
                someone standing at the Pi opens in a browser to see
                current sensor values without needing the cloud dashboard.
+  - HMI (optional, HMI_ENABLED=true only): pushes live values to a
+               Nextion-protocol serial touchscreen (edge/hmi.py) once a
+               second, for sensors mapped in edge/hmi_map.json.
 
 Usage:
     python edge/daemon.py --mock --plant-id goa_pilot_01
@@ -54,6 +57,7 @@ from edge.buffer import SqliteBuffer  # noqa: E402
 from edge.clock import ClockGate  # noqa: E402
 from edge.config import EdgeConfig  # noqa: E402
 from edge.dashboard import dashboard_task  # noqa: E402
+from edge.hmi import hmi_task, load_hmi_map  # noqa: E402
 from edge.local_store import LocalReadingsStore  # noqa: E402
 from edge.manifest import PostgresManifestSource, load_manifest  # noqa: E402
 from edge.mockgen import (  # noqa: E402
@@ -583,6 +587,10 @@ async def main_async(cfg: EdgeConfig) -> None:
     watchdog = loop.create_task(watchdog_task(ctx), name="watchdog")
     dashboard = loop.create_task(dashboard_task(ctx), name="dashboard")
     background = [publisher, sync, watchdog, dashboard]
+
+    if cfg.hmi_enabled:
+        hmi_component_map = load_hmi_map(cfg.hmi_map_path())
+        background.append(loop.create_task(hmi_task(ctx, hmi_component_map), name="hmi"))
 
     try:
         await poller  # returns on ctx.shutdown OR a graceful stop-file request

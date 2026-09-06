@@ -38,6 +38,10 @@ services:
       - ./edge/modbus_map.json:/app/edge/modbus_map.json:ro
       - ./edge/onewire_map.json:/app/edge/onewire_map.json:ro
       - ./edge/pms7003_map.json:/app/edge/pms7003_map.json:ro
+      # Nextion/SmartElex HMI screen's sensor->component mapping (edge/hmi.py)
+      # - only read at all if HMI_ENABLED=true in .env.pi. Fine to leave
+      # mounted and unused otherwise.
+      - ./edge/hmi_map.json:/app/edge/hmi_map.json:ro
       # Manifest cache, SQLite offline buffer, the permanent local
       # readings log (edge/local_store.py) that backs the dashboard below,
       # watchdog heartbeat/stats - named volumes so they survive
@@ -67,6 +71,13 @@ services:
       # (/dev/serial0 if using the Pi's primary UART pins, or another
       # /dev/ttyUSBn if it's on a third USB-serial adapter).
       - /dev/ttyAMA0
+      # Nextion/SmartElex HMI screen (edge/hmi.py) - commented out until it's
+      # actually wired up: an uncommented device path that doesn't exist yet
+      # makes `docker compose up` refuse to start at all (same failure mode
+      # hit earlier with ttyUSB0/1 before those adapters were plugged in).
+      # Uncomment once wired, set the real port with `ls /dev/tty*` (before/
+      # after plugging in), and match it to HMI_PORT in .env.pi.
+      # - /dev/ttyUSB2
 
 volumes:
   edge_cache:

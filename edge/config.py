@@ -84,6 +84,17 @@ class EdgeConfig:
     )
     dashboard_port: int = field(default_factory=lambda: int(os.environ.get("DASHBOARD_PORT", "8080")))
 
+    # --- Nextion-protocol HMI touchscreen (edge/hmi.py) ---
+    # e.g. the SmartElex Basic 4.0" display - a separate physical screen
+    # wired to its own serial port, driven independently of the local web
+    # dashboard above. Off by default: most Pis in this fleet won't have
+    # one attached, and hmi_map.json is empty (no component names) until
+    # someone has actually designed the screen's layout in the Nextion/
+    # SmartElex Editor - see edge/hmi.py's docstring.
+    hmi_enabled: bool = field(default_factory=lambda: _env_bool("HMI_ENABLED"))
+    hmi_port: str = field(default_factory=lambda: os.environ.get("HMI_PORT", "/dev/ttyUSB2"))
+    hmi_baud: int = field(default_factory=lambda: int(os.environ.get("HMI_BAUD", "9600")))
+
     # --- Timing ---
     poll_interval_s: float = 1.0
     publish_interval_s: float = 1.0
@@ -119,6 +130,9 @@ class EdgeConfig:
 
     def pms7003_map_path(self) -> Path:
         return EDGE_DIR / "pms7003_map.json"
+
+    def hmi_map_path(self) -> Path:
+        return EDGE_DIR / "hmi_map.json"
 
     def buffer_db_path(self) -> Path:
         return self.data_dir / f"buffer_{self.plant_id}.db"

@@ -1,0 +1,4 @@
+{
+  "_comment": "TODO: fill in real component names once the screen's layout has been designed in the Nextion/SmartElex Editor. Left EMPTY on purpose - an empty map means the HMI task runs but sends nothing, rather than guessing at component names that don't exist on your actual screen. Only include the sensors you actually gave a text box to on the screen - most screens won't have room for all 26.",
+  "_example": "\"SO2_out\": \"t0\" would mean: whenever SO2_out updates, write its value into the component named 't0' in your Nextion project. Component names are visible in the Nextion Editor's own component list/tree for whatever page you designed - they are NOT something this codebase can know or guess."
+}
