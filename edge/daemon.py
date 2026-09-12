@@ -57,6 +57,7 @@ from edge.buffer import SqliteBuffer  # noqa: E402
 from edge.clock import ClockGate  # noqa: E402
 from edge.config import EdgeConfig  # noqa: E402
 from edge.dashboard import dashboard_task  # noqa: E402
+from edge.health import DeviceHealthTracker  # noqa: E402
 from edge.hmi import hmi_task, load_hmi_map  # noqa: E402
 from edge.local_store import LocalReadingsStore  # noqa: E402
 from edge.manifest import PostgresManifestSource, load_manifest  # noqa: E402
@@ -92,6 +93,7 @@ class Context:
         self.outbox: asyncio.Queue = asyncio.Queue()
         self.buffer = SqliteBuffer(cfg.buffer_db_path())
         self.local_store = LocalReadingsStore(cfg.local_store_db_path(), cfg.local_retention_days)
+        self.health = DeviceHealthTracker()
         self.clock = ClockGate(cfg.clock_state_path())
         self.connected = asyncio.Event()
         self.shutdown = asyncio.Event()
@@ -196,17 +198,20 @@ async def _poll_once(ctx: Context, sensor_source, setpoint_source: MockSetpointS
         except asyncio.TimeoutError:
             value, flag = None, q.COMM_ERROR
 
+        ctx.health.record(sensor_id, flag)
+
         reading = {
             "plant_id": cfg.plant_id,
             "sensor_id": sensor_id,
             "ts": ts_iso,
             "value": value,
             "quality_flag": flag,
-            # 'mock' or 'real' - see edge/local_store.py's schema comment.
-            # Harmless extra key on the MQTT/cloud path: ingest/service.py's
-            # validate_reading() and its INSERT both only look at the 5
-            # fields above, so this rides along without affecting them.
-            "source": "mock" if cfg.mock else "real",
+            # 'hardware' or 'mock' - see edge/local_store.py's schema
+            # comment. Harmless extra key on the MQTT/cloud path: ingest/
+            # service.py's validate_reading() and its INSERT both only
+            # look at the 5 fields above, so this rides along without
+            # affecting them.
+            "source": "mock" if cfg.mock else "hardware",
         }
         ctx.outbox.put_nowait(("reading", reading))
         ctx.readings_generated_total += 1
@@ -536,7 +541,8 @@ def _build_real_sensor_source(cfg: EdgeConfig, sensors) -> CompositeSensorSource
 
 
 async def main_async(cfg: EdgeConfig) -> None:
-    log.info("edge daemon starting: plant_id=%s mock=%s", cfg.plant_id, cfg.mock)
+    log.info("edge daemon starting: plant_id=%s hardware_mode=%s (mock=%s)",
+              cfg.plant_id, cfg.hardware_mode, cfg.mock)
 
     # Clock gate FIRST, before the manifest load and long before any
     # reading is produced. A Pi has no battery-backed RTC: after a power

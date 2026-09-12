@@ -64,7 +64,7 @@ _PAGE = """<!doctype html>
   #source-banner.real { display: block; background: #1f6f43; color: #d1f7e0; }
   .src { font-size: 10px; padding: 1px 5px; border-radius: 8px; margin-left: 6px; }
   .src.mock { background: #7d2d1a; color: #ffdcd1; }
-  .src.real { background: #1f6f43; color: #d1f7e0; }
+  .src.hardware, .src.real { background: #1f6f43; color: #d1f7e0; }
   #export-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; padding: 10px 12px; background: #161b22; border: 1px solid #21262d; border-radius: 8px; }
   #export-panel label { font-size: 12px; color: #8b949e; display: flex; flex-direction: column; gap: 3px; }
   #export-panel input[type="datetime-local"] { background: #0b0f14; color: #e6edf3; border: 1px solid #30363d; border-radius: 4px; padding: 4px 6px; font-size: 12px; }
@@ -245,6 +245,16 @@ async def _handle_client(ctx: "Context", reader: asyncio.StreamReader, writer: a
                     "local_row_count": await ctx.local_store.count(),
                     "readings": readings,
                 }
+            ).encode("utf-8")
+            writer.write(_http_response("200 OK", "application/json", body))
+        elif path == "/api/health":
+            # Per-device health (edge/health.py) - online/offline,
+            # last_seen, consecutive_failures per sensor. Answers "is THIS
+            # sensor healthy right now", a different question from
+            # /api/latest's "what's its current value".
+            body = json.dumps(
+                {"plant_id": ctx.cfg.plant_id, "hardware_mode": ctx.cfg.hardware_mode,
+                 "devices": ctx.health.snapshot()}
             ).encode("utf-8")
             writer.write(_http_response("200 OK", "application/json", body))
         elif path.startswith("/api/history/"):

@@ -28,6 +28,24 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+_VALID_HARDWARE_MODES = ("real", "mock", "replay")
+
+
+def _hardware_mode_from_env() -> str:
+    """'real' (default - attempt actual hardware, never silently substitute
+    fake data), 'mock' (edge/mockgen.py's simulator - an explicit dev/test
+    opt-in, never the default), or 'replay' (recognized in the vocabulary
+    but not implemented - see EdgeConfig.__post_init__, which fails
+    clearly rather than silently doing nothing if this is requested)."""
+    raw = os.environ.get("HARDWARE_MODE", "real").strip().lower()
+    if raw not in _VALID_HARDWARE_MODES:
+        raise SystemExit(
+            f"HARDWARE_MODE={raw!r} is not a valid value - must be one of "
+            f"{_VALID_HARDWARE_MODES}. Refusing to guess which mode was intended."
+        )
+    return raw
+
+
 def _default_mqtt_port() -> int:
     # TLS (8883) is the only listener docker-compose.yml exposes publicly -
     # the plaintext dev listener (1883) is bound to 127.0.0.1 on the
@@ -43,7 +61,15 @@ def _default_mqtt_port() -> int:
 @dataclass
 class EdgeConfig:
     plant_id: str
-    mock: bool = True
+    # Authoritative real/mock switch the rest of the daemon branches on
+    # (CompositeSensorSource vs MockSensorSource - see daemon.py). Defaults
+    # to False (real hardware) - this must NEVER default to mock. Combined
+    # with hardware_mode below in __post_init__: HARDWARE_MODE=mock forces
+    # this true even if --mock wasn't passed on the CLI; an explicit
+    # --mock flag is honored regardless of HARDWARE_MODE, for quick local
+    # testing without needing to also change an env var.
+    mock: bool = False
+    hardware_mode: str = field(default_factory=_hardware_mode_from_env)
 
     # --- Postgres (manifest source) ---
     database_url: str = field(default_factory=lambda: os.environ.get("DATABASE_URL", ""))
@@ -169,6 +195,24 @@ class EdgeConfig:
     def __post_init__(self) -> None:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.data_dir.mkdir(parents=True, exist_ok=True)
+
+        # Resolve HARDWARE_MODE against the mock flag. 'replay' fails
+        # clearly rather than being silently ignored - there is no
+        # replay-from-history source implemented yet (see
+        # _hardware_mode_from_env's docstring).
+        if self.hardware_mode == "replay":
+            raise SystemExit(
+                "HARDWARE_MODE=replay is recognized but not implemented yet - there is "
+                "no replay-from-history sensor source built in this codebase. Use "
+                "HARDWARE_MODE=real (default, attempts actual hardware) or "
+                "HARDWARE_MODE=mock (edge/mockgen.py's simulator) instead."
+            )
+        if self.hardware_mode == "mock":
+            # An explicit --mock CLI flag is already True here and this is
+            # a no-op; this only matters when HARDWARE_MODE=mock is set via
+            # env without also passing --mock (e.g. a docker-compose
+            # command line that isn't being edited for a quick test).
+            self.mock = True
 
         # Fail at startup, not several MqttError retries into
         # publisher_task()'s reconnect loop, where "connection failed"

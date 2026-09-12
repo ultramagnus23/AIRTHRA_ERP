@@ -33,11 +33,14 @@ CREATE TABLE IF NOT EXISTS local_readings (
     ts            TEXT NOT NULL,
     value         REAL,
     quality_flag  INTEGER NOT NULL,
-    -- 'mock' (edge/mockgen.py's simulator) or 'real' (an actual poller
-    -- reading physical hardware) - see daemon.py's _poll_once(), which
-    -- sets this from cfg.mock. Exists so nobody has to guess, from the
-    -- dashboard, whether what they're looking at is simulated or real.
-    source        TEXT NOT NULL DEFAULT 'real'
+    -- 'mock' (edge/mockgen.py's simulator) or 'hardware' (an actual
+    -- poller reading physical hardware) - see daemon.py's _poll_once(),
+    -- which sets this from cfg.mock/cfg.hardware_mode. Exists so nobody
+    -- has to guess, from the dashboard, whether what they're looking at
+    -- is simulated or real. Older rows may say 'real' instead of
+    -- 'hardware' (pre-rename) - the dashboard treats anything not
+    -- literally 'mock' as non-mock, so this doesn't need a data migration.
+    source        TEXT NOT NULL DEFAULT 'hardware'
 );
 CREATE INDEX IF NOT EXISTS idx_local_readings_ts ON local_readings(ts);
 CREATE INDEX IF NOT EXISTS idx_local_readings_sensor ON local_readings(sensor_id, id);
@@ -64,7 +67,7 @@ class LocalReadingsStore:
         await cursor.close()
         if "source" not in columns:
             await self._conn.execute(
-                "ALTER TABLE local_readings ADD COLUMN source TEXT NOT NULL DEFAULT 'real'"
+                "ALTER TABLE local_readings ADD COLUMN source TEXT NOT NULL DEFAULT 'hardware'"
             )
             await self._conn.commit()
 
