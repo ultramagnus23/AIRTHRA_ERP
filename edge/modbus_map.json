@@ -1,9 +1,10 @@
 {
   "_comment": "TODO: fill in real bus/slave_id/register values - these sensor_ids match seed/seed.py's SENSORS list and the `sensors` table, but the wiring fields below (bus, slave_id, register) are placeholders and MUST be replaced from each Modbus device's datasheet/DIP-switch config before use. bus is /dev/ttyUSB0 or /dev/ttyUSB1 per the two RS-485 adapters. See edge/mockgen.py ModbusRegisterMap for field meanings.",
   "_comment_scope": "Only sensors with interface='modbus' in the `sensors` table belong in this file - the 15 DS18B20 probes (interface='onewire') and PMS7003 PM channels (interface='pms7003') live in edge/onewire_map.json and edge/pms7003_map.json instead. Do not duplicate them here: CompositeSensorSource (edge/mockgen.py) requires each sensor_id be claimed by exactly one map/poller and raises at startup if two claim the same id.",
-  "_comment_relay_module": "The 12V Modbus relay module (damper + solenoid control, per the BOM) is now physically address-set to slave ID 0x02 (2) - see test_real_pollers.py's ping check, which verifies it responds on the bus. It's still NOT in seed/seed.py's SENSORS list or here as a polled sensor yet: whether it exposes Modbus-readable status/feedback registers (vs. write-only coils with no readback) is still unconfirmed from its datasheet. Do not invent register numbers or tag names before that's confirmed - a fabricated placeholder here would be silently 'plausible' in a way a real safety-relevant device (damper interlock) shouldn't be.",
-  "_comment_o2": "The ASAIR AO-03 O2 sensor's own datasheet (aosong.com) confirms it is a raw analog current output (0.1mA in air, linear 1-25% Vol O2 across a 100 ohm load resistor) - NOT a digital interface. It reads through a channel of the Waveshare 8-channel analog module on the RS-485 bus, which is itself the Modbus slave - hence interface='modbus' in seed/seed.py even though the O2 cell itself has no protocol. slave_id below (0x01) is now the real, physically-set address of that Waveshare module. register is STILL a placeholder: it needs the Waveshare module's own register map (separate datasheet, not yet available) to know which holding register that analog channel lands on.",
-  "_comment_slave_ids": "SO2_in/SO2_out/o2_pct's slave_id values below are now real, physically-set addresses (Sangbay SO2 High=0x03, Sangbay SO2 Low=0x04, Waveshare analog module=0x01) - confirmed 2026-09-06. register/bus are STILL placeholders: bus (which of the two RS-485 adapters) hasn't been confirmed for these three specifically, and register needs each device's datasheet.",
+  "_comment_waveshare": "CONFIRMED 2026-09-13 from the Delhi engineer's schematic (Sheet 3/4): Waveshare 8-Ch Analog Module, slave 0x01, exposes its 8 channels (IN1-IN8) as registers 0x0000-0x0007 in sequence (IN1=reg0, IN2=reg1, ... IN8=reg7). Raw value is the loop current in MICROAMPS (4000-20000 = 4.00-20.00mA), NOT pre-scaled to engineering units - hence the scale/offset below implementing each channel's engineering conversion directly (see the docstring in edge/analog.py for the general 4-20mA formula these were derived from). Schematic says 'Function Code 0x03 or 0x04' (ambiguous holding vs input registers) - register_type is set to holding below; if reads fail on real hardware, try changing to 'input' before assuming a wiring problem. bus (/dev/ttyUSB0 vs 1) for the Waveshare module is NOT stated in the schematic - placeholder below, confirm with `ls /dev/ttyUSB*` continuity/labeling on the day.",
+  "_comment_relay_module": "The 12V Modbus relay module (damper + solenoid control) is at slave 0x02, function codes 0x05 (write single coil) / 0x0F (write multiple), coils 0-7 = Relay 1-8, ON=0xFF00/OFF=0x0000 - confirmed 2026-09-13. This is a WRITE-only actuator, not a polled sensor, so it has no entry in this read-oriented map - see edge/actuator.py for the relay control module, and Sheet 6 of the schematic for what each of the 6 wired relays actually does (including Relay 4's safety-critical NC/fail-safe wiring for the damper magnet - do not test that one casually).",
+  "_comment_o2": "The ASAIR AO-03 O2 sensor (Waveshare IN7 = register 6, per Sheet 4) - see _comment_waveshare above. scale/offset now derived from its real 1-25% Vol linear range across the 4-20mA loop (AO-03's own datasheet), replacing the earlier register=0 placeholder.",
+  "_comment_ambiguous": "NOT added below, still genuinely unclear, do not guess: 'Winsen SO2 (clean stack)' on Waveshare IN5 (register 4) appears to duplicate the already-configured Sangbay SO2 (Low) direct-Modbus sensor (SO2_out, slave 0x04) - two different manufacturers/interfaces for what reads as the same physical measurement. 'Winsen CO' on IN6 (register 5) is a genuinely new sensor with no prior manifest entry, but the schematic itself says its scaling is 'from analog voltage output' rather than a plain 4-20mA loop like the others, so the scale/offset math above doesn't obviously apply - confirm which SO2 source is authoritative and CO's actual scaling before wiring either into the manifest.",
   "SO2_in": {
     "bus": "/dev/ttyUSB0",
     "slave_id": 3,
@@ -84,12 +85,56 @@
   "o2_pct": {
     "bus": "/dev/ttyUSB0",
     "slave_id": 1,
+    "register": 6,
+    "register_type": "holding",
+    "count": 1,
+    "datatype": "int16",
+    "scale": 0.0015,
+    "offset": -5.0,
+    "word_order": "big"
+  },
+  "PT_01": {
+    "bus": "/dev/ttyUSB0",
+    "slave_id": 1,
     "register": 0,
     "register_type": "holding",
     "count": 1,
     "datatype": "int16",
-    "scale": 1.0,
-    "offset": 0.0,
+    "scale": 0.000125,
+    "offset": -1.5,
+    "word_order": "big"
+  },
+  "PT_05": {
+    "bus": "/dev/ttyUSB0",
+    "slave_id": 1,
+    "register": 1,
+    "register_type": "holding",
+    "count": 1,
+    "datatype": "int16",
+    "scale": 0.000375,
+    "offset": -1.5,
+    "word_order": "big"
+  },
+  "PT_08": {
+    "bus": "/dev/ttyUSB0",
+    "slave_id": 1,
+    "register": 2,
+    "register_type": "holding",
+    "count": 1,
+    "datatype": "int16",
+    "scale": 0.000375,
+    "offset": -1.5,
+    "word_order": "big"
+  },
+  "LE_01": {
+    "bus": "/dev/ttyUSB0",
+    "slave_id": 1,
+    "register": 3,
+    "register_type": "holding",
+    "count": 1,
+    "datatype": "int16",
+    "scale": 0.02520161290322581,
+    "offset": -100.80645161290323,
     "word_order": "big"
   }
 }

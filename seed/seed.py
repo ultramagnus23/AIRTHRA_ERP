@@ -126,6 +126,17 @@ SENSORS = [
     ("pm10", "pm10", "ug/m3", 0, 1000, "pms7003"),
 ] + [
     ("o2_pct", "o2", "%", 1, 25, "modbus"),  # AO-03 datasheet linear range; via Waveshare analog module
+] + [
+    # 4 more Waveshare-analog-module channels, added 2026-09-13 from the
+    # Delhi engineer's schematic (Sheet 4) - real 4-20mA engineering
+    # ranges given directly there, so min_valid/max_valid ARE the sensor's
+    # actual rated range this time, not TODO placeholders like the first 7.
+    # See edge/modbus_map.json's PT_01/PT_05/PT_08/LE_01 entries for the
+    # derived scale/offset.
+    ("PT_01", "vacuum", "bar", -1.0, 1.0, "modbus"),   # E-102 FFE stripper vacuum
+    ("PT_05", "pressure", "bar", 0, 6.0, "modbus"),    # P-101 PC pump discharge pressure
+    ("PT_08", "pressure", "bar", 0, 6.0, "modbus"),    # P-103 venturi motive pressure
+    ("LE_01", "level", "cm", 0, 403.2258064516129, "modbus"),  # T-101 absorber sump liquid level
 ]
 
 # name, grade, density_kg_m3, rate_per_kg, hsn

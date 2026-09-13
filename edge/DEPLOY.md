@@ -76,34 +76,31 @@ whether the Pi can actually reach the broker/Postgres once it's running.
   Imager. 64-bit matters for Docker: Pi 4/5 should run `linux/arm64`
   images; an older Pi 3 / Zero 2 W on 32-bit OS needs `linux/arm/v7`
   instead (noted again in the build command below).
-- **Enable THREE independent 1-Wire buses** for the 15 DS18B20 probes -
-  not one. This plant deliberately splits them into 3 physically separate
-  buses (gas path / solvent loop / product & utility, 5 probes each) so a
-  probe shorted by acid takes out only its own group of 5, not all 15.
+- **Enable 1-Wire on GPIO2 (physical pin 3)** for the 15 DS18B20 probes.
+  REVERTED 2026-09-13 from an earlier 3-bus (GPIO4/17/27) design back to a
+  single bus on GPIO2, per the Delhi engineer's schematic - GPIO2 has a
+  **built-in 1.8kΩ pull-up already on the Pi board** (it's normally the
+  I2C SDA line), so **no external pull-up resistor is needed** for this
+  bus. Trade-off, made deliberately: this means the Pi's I2C bus (GPIO2/3)
+  is NOT available for anything else - confirmed the 20x4 I2C LCD in the
+  BOM is not being used on this build. If that ever changes, 1-Wire needs
+  to move to a different GPIO (e.g. back to the 3-bus GPIO4/17/27 split,
+  still supported by the code - see edge/onewire_map.json's `bus` field)
+  and a real external 4.7kΩ pull-up added back.
   Edit `/boot/firmware/config.txt` (older OS versions: `/boot/config.txt`)
-  and add all three lines:
+  and add:
   ```
-  dtoverlay=w1-gpio,gpiopin=4
-  dtoverlay=w1-gpio,gpiopin=17
-  dtoverlay=w1-gpio,gpiopin=27
+  dtoverlay=w1-gpio,gpiopin=2
   ```
-  Each needs its own 4.7kΩ pull-up resistor between that GPIO's data line
-  and 3.3V - three resistors total, one per bus, not one per probe. Reboot
-  after adding these, then confirm probes are visible on the **host** (not
-  yet in a container):
+  Reboot after adding this, then confirm probes are visible on the
+  **host** (not yet in a container):
   ```bash
   ls /sys/bus/w1/devices
   ```
-  All three buses show up together in this one directory (Linux's 1-Wire
-  subsystem doesn't separate them here) - you should see one `28-...`
-  entry per DS18B20 currently wired up, plus three `w1_bus_masterN`
-  entries (one per GPIO). If only the bus masters show up with no `28-...`
-  entries, wiring/pull-ups need checking before going further, since
-  `edge/onewire_map.json` needs each probe's exact ROM id. There is no way
-  to tell from this listing alone which physical bus a given `28-...`
-  probe is on - that's tracked separately in `edge/onewire_map.json`'s
-  `bus` field (which you fill in based on which GPIO you were wiring to
-  when that ID first appeared), not derived automatically.
+  You should see one `28-...` entry per DS18B20 currently wired up, plus
+  a `w1_bus_master1` entry. If only the bus master shows up with no
+  `28-...` entries, wiring needs checking before going further, since
+  `edge/onewire_map.json` needs each probe's exact ROM id.
 - **Enable the UART for the SmartElex HMI touchscreen** - GPIO14/15 is
   permanently dedicated to this screen on this plant, not the PMS7003 (see
   below). In `raspi-config` → Interface Options → Serial Port, answer "No"
