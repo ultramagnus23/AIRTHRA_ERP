@@ -160,6 +160,9 @@ class EdgeConfig:
     def hmi_map_path(self) -> Path:
         return EDGE_DIR / "hmi_map.json"
 
+    def max31865_map_path(self) -> Path:
+        return EDGE_DIR / "max31865_map.json"
+
     def buffer_db_path(self) -> Path:
         return self.data_dir / f"buffer_{self.plant_id}.db"
 

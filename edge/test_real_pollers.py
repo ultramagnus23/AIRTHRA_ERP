@@ -2,7 +2,8 @@
 """Dry-run wiring check for the real sensor pollers (edge/mockgen.py).
 
 Run this once edge/modbus_map.json / edge/onewire_map.json /
-edge/pms7003_map.json have been filled in with real values, BEFORE
+edge/pms7003_map.json / edge/max31865_map.json have been filled in with
+real values, BEFORE
 attempting a full `python edge/daemon.py --plant-id ... ` (real, non-mock)
 run. It builds the same CompositeSensorSource daemon.py would, attempts one
 read of every sensor in the manifest, and prints a table of what's reachable
@@ -30,6 +31,7 @@ if str(ROOT) not in sys.path:
 
 from edge.config import EdgeConfig  # noqa: E402
 from edge.manifest import PostgresManifestSource, load_manifest  # noqa: E402
+from edge.max31865 import RealMAX31865Poller, load_max31865_map  # noqa: E402
 from edge.mockgen import (  # noqa: E402
     RealModbusPoller,
     RealOneWirePoller,
@@ -151,12 +153,14 @@ async def main_async(plant_id: str, timeout: float) -> int:
     modbus_map = _load_map_or_empty(load_modbus_map, cfg.modbus_map_path(), "modbus")
     onewire_map = _load_map_or_empty(load_onewire_map, cfg.onewire_map_path(), "onewire")
     pms7003_map = _load_map_or_empty(load_pms7003_map, cfg.pms7003_map_path(), "pms7003")
+    max31865_map = _load_map_or_empty(load_max31865_map, cfg.max31865_map_path(), "max31865")
     print()
 
     modbus_sensors = [s for s in sensors if s.sensor_id in modbus_map]
     onewire_sensors = [s for s in sensors if s.sensor_id in onewire_map]
     pms_sensors = [s for s in sensors if s.sensor_id in pms7003_map]
-    claimed = {s.sensor_id for s in modbus_sensors + onewire_sensors + pms_sensors}
+    max31865_sensors = [s for s in sensors if s.sensor_id in max31865_map]
+    claimed = {s.sensor_id for s in modbus_sensors + onewire_sensors + pms_sensors + max31865_sensors}
     unclaimed = [s for s in sensors if s.sensor_id not in claimed]
     unconfirmed = [s.sensor_id for s in unclaimed if s.interface in (None, "unconfirmed")]
     misconfigured = [s.sensor_id for s in unclaimed if s.interface not in (None, "unconfirmed")]
@@ -194,6 +198,14 @@ async def main_async(plant_id: str, timeout: float) -> int:
         for s in pms_sensors:
             value, flag, error, elapsed = await _read_with_timing(poller, s.sensor_id, timeout)
             results.append(("pms7003", pms7003_map[s.sensor_id].device, s, value, flag, error, elapsed))
+        await poller.close()
+
+    if max31865_sensors:
+        poller = RealMAX31865Poller(max31865_sensors, max31865_map)
+        for s in max31865_sensors:
+            value, flag, error, elapsed = await _read_with_timing(poller, s.sensor_id, timeout)
+            physical = f"SPI CE{max31865_map[s.sensor_id].cs}"
+            results.append(("max31865", physical, s, value, flag, error, elapsed))
         await poller.close()
 
     print(f"{'sensor_id':<20} {'kind':<9} {'physical':<26} {'status':<14} {'value':>10}   {'notes'}")

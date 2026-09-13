@@ -42,6 +42,8 @@ services:
       # - only read at all if HMI_ENABLED=true in .env.pi. Fine to leave
       # mounted and unused otherwise.
       - ./edge/hmi_map.json:/app/edge/hmi_map.json:ro
+      # MAX31865/PT100 chip-select + reference-resistor mapping (edge/max31865.py)
+      - ./edge/max31865_map.json:/app/edge/max31865_map.json:ro
       # Manifest cache, SQLite offline buffer, the permanent local
       # readings log (edge/local_store.py) that backs the dashboard below,
       # watchdog heartbeat/stats - named volumes so they survive
@@ -81,6 +83,14 @@ services:
       # commented out until the screen is actually wired + powered.
       # Uncomment once confirmed, and match it to HMI_PORT in .env.pi.
       # - /dev/ttyAMA0
+      # MAX31865 SPI RTD amplifiers (edge/max31865.py) - CE0 (TE-08) and
+      # CE1 (TE-09), per the schematic. Requires SPI enabled first
+      # (raspi-config -> Interface Options -> SPI -> Yes, then reboot) -
+      # both device files must exist (`ls /dev/spidev*`) before
+      # uncommenting, same "container refuses to start" failure mode as
+      # every other commented-out device line in this file.
+      # - /dev/spidev0.0
+      # - /dev/spidev0.1
 
 volumes:
   edge_cache:

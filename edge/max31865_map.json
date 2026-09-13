@@ -1,0 +1,5 @@
+{
+  "_comment": "cs: 0 = SPI CE0 (physical pin 24), 1 = SPI CE1 (physical pin 26) - per the Delhi engineer's schematic Sheet 5, Board 1 (TE-08) is CE0, Board 2 (TE-09) is CE1. r_ref (reference resistor, ohms) is NOT confirmed for these specific boards - 430 is the common default for PT100 3-wire MAX31865 breakouts, used here as a placeholder. TODO: read the actual printed/measured value off each board before trusting readings precisely.",
+  "TE_08": { "cs": 0, "r_ref": 430.0, "r0": 100.0 },
+  "TE_09": { "cs": 1, "r_ref": 430.0, "r0": 100.0 }
+}

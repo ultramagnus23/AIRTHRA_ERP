@@ -114,6 +114,13 @@ whether the Pi can actually reach the broker/Postgres once it's running.
   HMI screen above), then `ls /dev/ttyUSB*` - note which is which (USB
   enumeration order can swap across reboots if adapters are ever
   unplugged/replugged; see the note in `docker-compose.pi.yml`).
+- **Enable SPI** for the two MAX31865/PT100 amplifiers (TE-08, TE-09):
+  `raspi-config` → Interface Options → SPI → Yes, then reboot. Confirm:
+  ```bash
+  ls /dev/spidev*
+  ```
+  You should see `/dev/spidev0.0` (CE0, physical pin 24, TE-08) and
+  `/dev/spidev0.1` (CE1, physical pin 26, TE-09).
 
 ## 2. Install Docker on the Pi
 

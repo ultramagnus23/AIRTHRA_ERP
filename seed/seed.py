@@ -137,6 +137,14 @@ SENSORS = [
     ("PT_05", "pressure", "bar", 0, 6.0, "modbus"),    # P-101 PC pump discharge pressure
     ("PT_08", "pressure", "bar", 0, 6.0, "modbus"),    # P-103 venturi motive pressure
     ("LE_01", "level", "cm", 0, 403.2258064516129, "modbus"),  # T-101 absorber sump liquid level
+] + [
+    # 2x PT100 via MAX31865 SPI amplifiers - real wiring confirmed
+    # 2026-09-13 (see edge/max31865_map.json). min_valid/max_valid are a
+    # generic wide placeholder (not from a datasheet/commissioning limit)
+    # since the stripper's actual expected operating range isn't given -
+    # TODO narrow these once real values are being observed.
+    ("TE_08", "temperature", "C", -20, 250, "spi"),  # E-102 FFE stripper feed temp
+    ("TE_09", "temperature", "C", -20, 250, "spi"),  # E-102 FFE lean solvent temp
 ]
 
 # name, grade, density_kg_m3, rate_per_kg, hsn

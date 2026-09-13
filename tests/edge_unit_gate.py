@@ -24,6 +24,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from edge.analog import convert_4_20ma  # noqa: E402
+from edge.max31865 import decode_faults, raw_to_resistance, resistance_to_celsius  # noqa: E402
 from shared import quality as q  # noqa: E402
 
 results = []  # (name, bool)
@@ -72,6 +73,27 @@ check("3.6mA (exactly at under-range boundary) -> GOOD, not flagged", r.quality_
 
 r = convert_4_20ma(21.0, 0.0, 100.0)
 check("21.0mA (exactly at over-range boundary) -> GOOD, not flagged", r.quality_flag == q.GOOD)
+
+# --- MAX31865 PT100 resistance->temperature (Callendar-Van Dusen, T>=0) ---
+# Reference points from the standard PT100/IEC 60751 table.
+check("100.00 ohm -> 0 degC (PT100 reference point)",
+      abs(resistance_to_celsius(100.00) - 0.0) < 0.05)
+check("138.51 ohm -> 100 degC (PT100 reference point)",
+      abs(resistance_to_celsius(138.51) - 100.0) < 0.05)
+check("119.40 ohm -> 50 degC (PT100 reference point)",
+      abs(resistance_to_celsius(119.40) - 50.0) < 0.05)
+
+# raw ADC code -> resistance: MAX31865 formula is R = (code * R_REF) / 32768,
+# so half of full-scale (16384) at R_REF=430 should be exactly half of 430.
+check("raw_to_resistance: half-scale code -> half of R_REF",
+      abs(raw_to_resistance(16384, 430.0) - 215.0) < 1e-9)
+check("raw_to_resistance: zero code -> 0 ohm", raw_to_resistance(0, 430.0) == 0.0)
+
+# Fault byte decoding: must report every set bit, and nothing for a clean read.
+check("fault byte 0x00 -> no faults", decode_faults(0x00) == [])
+check("fault byte 0x08 -> RTD open circuit reported",
+      any("open circuit" in f for f in decode_faults(0x08)))
+check("fault byte 0x88 -> both set bits reported (2 faults)", len(decode_faults(0x88)) == 2)
 
 # --- HARDWARE_MODE / mock resolution (edge/config.py) ---
 os.environ.pop("HARDWARE_MODE", None)
