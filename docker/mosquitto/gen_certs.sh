@@ -29,10 +29,18 @@ openssl req -new -key server.key -out server.csr \
   -subj "/O=Airthra/CN=${CN_SERVER}"
 
 echo "==> Signing server cert with the CA"
+# Clients check the subjectAltName, not the CN. Without it the Rust edge
+# daemon (edge-rs/) rejects the certificate.
+if [[ "${CN_SERVER}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  SAN="IP:${CN_SERVER}"
+else
+  SAN="DNS:${CN_SERVER}"
+fi
+printf 'subjectAltName=%s\nextendedKeyUsage=serverAuth\n' "${SAN}" > server.ext
 openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
-  -out server.crt -days "${DAYS}" -sha256
+  -out server.crt -days "${DAYS}" -sha256 -extfile server.ext
 
-rm -f server.csr
+rm -f server.csr server.ext
 
 chmod 644 ca.crt server.crt
 chmod 600 ca.key server.key
