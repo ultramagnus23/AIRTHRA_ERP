@@ -14,3 +14,7 @@ docker/mosquitto/passwd
 edge/data/
 edge/cache/
 tests/_p1_gate_logs/
+
+# Rust edge daemon
+edge-rs/target/
+edge-rs/data/

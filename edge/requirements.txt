@@ -14,3 +14,10 @@ aiomqtt==2.5.1
 aiosqlite==0.22.1
 pymodbus==3.15.0
 pyserial==3.5
+# MAX31865 SPI RTD amplifiers (edge/max31865.py) - Linux-only (wraps the
+# kernel's /dev/spidevX.Y ioctl interface), builds fine in the Pi's Docker
+# image (gcc already installed there for psycopg) but will NOT install on
+# a non-Linux dev machine - that's expected, edge/max31865.py only imports
+# it lazily inside its poller, so --mock and everything else still works
+# fine without it.
+spidev==3.6

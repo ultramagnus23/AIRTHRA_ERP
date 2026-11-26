@@ -4,10 +4,20 @@
 # for the full walkthrough.
 #
 # Usage on the Pi:
-#   docker compose -f docker-compose.pi.yml up -d
+#   git pull
+#   docker compose -f docker-compose.pi.yml up -d --build
 #   docker compose -f docker-compose.pi.yml logs -f
+#
+# --build now actually does something: without a `build:` block, compose's
+# --build flag is a silent no-op for a service that only has `image:` - it
+# just reuses whatever's already tagged, even if it's stale. This runs
+# from a `git pull` on latest code every time, no separate manual
+# `docker build -f edge/Dockerfile ...` step needed first.
 services:
   edge:
+    build:
+      context: .
+      dockerfile: edge/Dockerfile
     image: airthra-edge:latest
     container_name: airthra_edge
     restart: unless-stopped
@@ -28,6 +38,12 @@ services:
       - ./edge/modbus_map.json:/app/edge/modbus_map.json:ro
       - ./edge/onewire_map.json:/app/edge/onewire_map.json:ro
       - ./edge/pms7003_map.json:/app/edge/pms7003_map.json:ro
+      # Nextion/SmartElex HMI screen's sensor->component mapping (edge/hmi.py)
+      # - only read at all if HMI_ENABLED=true in .env.pi. Fine to leave
+      # mounted and unused otherwise.
+      - ./edge/hmi_map.json:/app/edge/hmi_map.json:ro
+      # MAX31865/PT100 chip-select + reference-resistor mapping (edge/max31865.py)
+      - ./edge/max31865_map.json:/app/edge/max31865_map.json:ro
       # Manifest cache, SQLite offline buffer, the permanent local
       # readings log (edge/local_store.py) that backs the dashboard below,
       # watchdog heartbeat/stats - named volumes so they survive
@@ -53,10 +69,28 @@ services:
       # keyed on each adapter's USB serial number for a production install.
       - /dev/ttyUSB0
       - /dev/ttyUSB1
-      # PMS7003 UART - adjust to the port it's actually wired to
-      # (/dev/serial0 if using the Pi's primary UART pins, or another
-      # /dev/ttyUSBn if it's on a third USB-serial adapter).
-      - /dev/ttyAMA0
+      # PMS7003 - now on its OWN USB-to-TTL adapter, NOT the Pi's built-in
+      # UART: GPIO14/15 (/dev/ttyAMA0 / /dev/serial0) is permanently
+      # dedicated to the SmartElex HMI screen below. Commented out until
+      # this adapter is confirmed plugged in - an uncommented device path
+      # that doesn't exist yet makes `docker compose up` refuse to start
+      # at all (same failure mode hit earlier with ttyUSB0/1). Confirm the
+      # exact number with `ls /dev/tty*` before/after plugging it in, match
+      # it to edge/pms7003_map.json's "device" value, then uncomment.
+      # - /dev/ttyUSB2
+      # Nextion/SmartElex HMI screen (edge/hmi.py) - the Pi's built-in UART,
+      # permanently dedicated to this screen (see the comment above). Also
+      # commented out until the screen is actually wired + powered.
+      # Uncomment once confirmed, and match it to HMI_PORT in .env.pi.
+      # - /dev/ttyAMA0
+      # MAX31865 SPI RTD amplifiers (edge/max31865.py) - CE0 (TE-08) and
+      # CE1 (TE-09), per the schematic. Requires SPI enabled first
+      # (raspi-config -> Interface Options -> SPI -> Yes, then reboot) -
+      # both device files must exist (`ls /dev/spidev*`) before
+      # uncommenting, same "container refuses to start" failure mode as
+      # every other commented-out device line in this file.
+      # - /dev/spidev0.0
+      # - /dev/spidev0.1
 
 volumes:
   edge_cache:

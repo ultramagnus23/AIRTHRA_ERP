@@ -1,0 +1,23 @@
+[package]
+name = "airthra-edge"
+version = "0.1.0"
+edition = "2021"
+description = "Airthra Raspberry Pi edge daemon: sensors, touchscreen HMI, Wi-Fi, MQTT"
+publish = false
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+time = "0.3"
+serialport = { version = "4", default-features = false }
+rusqlite = { version = "0.32", features = ["bundled"] }
+rumqttc = "0.24"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+spidev = "0.6"
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1

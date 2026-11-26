@@ -1,0 +1,20 @@
+[Unit]
+Description=Airthra edge daemon (sensors, touchscreen, MQTT)
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+User=airthra
+SupplementaryGroups=dialout spi
+EnvironmentFile=/etc/airthra-edge.env
+ExecStart=/opt/airthra-edge/airthra-edge run
+StateDirectory=airthra-edge
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

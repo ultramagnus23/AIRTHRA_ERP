@@ -24,6 +24,9 @@ Single asyncio process, five concurrent tasks:
                reads straight off the local store above. This is what
                someone standing at the Pi opens in a browser to see
                current sensor values without needing the cloud dashboard.
+  - HMI (optional, HMI_ENABLED=true only): pushes live values to a
+               Nextion-protocol serial touchscreen (edge/hmi.py) once a
+               second, for sensors mapped in edge/hmi_map.json.
 
 Usage:
     python edge/daemon.py --mock --plant-id goa_pilot_01
@@ -54,8 +57,11 @@ from edge.buffer import SqliteBuffer  # noqa: E402
 from edge.clock import ClockGate  # noqa: E402
 from edge.config import EdgeConfig  # noqa: E402
 from edge.dashboard import dashboard_task  # noqa: E402
+from edge.health import DeviceHealthTracker  # noqa: E402
+from edge.hmi import hmi_task, load_hmi_map  # noqa: E402
 from edge.local_store import LocalReadingsStore  # noqa: E402
 from edge.manifest import PostgresManifestSource, load_manifest  # noqa: E402
+from edge.max31865 import RealMAX31865Poller, load_max31865_map  # noqa: E402
 from edge.mockgen import (  # noqa: E402
     CompositeSensorSource,
     MockSensorSource,
@@ -88,6 +94,7 @@ class Context:
         self.outbox: asyncio.Queue = asyncio.Queue()
         self.buffer = SqliteBuffer(cfg.buffer_db_path())
         self.local_store = LocalReadingsStore(cfg.local_store_db_path(), cfg.local_retention_days)
+        self.health = DeviceHealthTracker()
         self.clock = ClockGate(cfg.clock_state_path())
         self.connected = asyncio.Event()
         self.shutdown = asyncio.Event()
@@ -192,17 +199,20 @@ async def _poll_once(ctx: Context, sensor_source, setpoint_source: MockSetpointS
         except asyncio.TimeoutError:
             value, flag = None, q.COMM_ERROR
 
+        ctx.health.record(sensor_id, flag)
+
         reading = {
             "plant_id": cfg.plant_id,
             "sensor_id": sensor_id,
             "ts": ts_iso,
             "value": value,
             "quality_flag": flag,
-            # 'mock' or 'real' - see edge/local_store.py's schema comment.
-            # Harmless extra key on the MQTT/cloud path: ingest/service.py's
-            # validate_reading() and its INSERT both only look at the 5
-            # fields above, so this rides along without affecting them.
-            "source": "mock" if cfg.mock else "real",
+            # 'hardware' or 'mock' - see edge/local_store.py's schema
+            # comment. Harmless extra key on the MQTT/cloud path: ingest/
+            # service.py's validate_reading() and its INSERT both only
+            # look at the 5 fields above, so this rides along without
+            # affecting them.
+            "source": "mock" if cfg.mock else "hardware",
         }
         ctx.outbox.put_nowait(("reading", reading))
         ctx.readings_generated_total += 1
@@ -490,12 +500,14 @@ def _build_real_sensor_source(cfg: EdgeConfig, sensors) -> CompositeSensorSource
     modbus_map = load_modbus_map(cfg.modbus_map_path())
     onewire_map = load_onewire_map(cfg.onewire_map_path())
     pms7003_map = load_pms7003_map(cfg.pms7003_map_path())
+    max31865_map = load_max31865_map(cfg.max31865_map_path())
 
     modbus_sensors = [s for s in sensors if s.sensor_id in modbus_map]
     onewire_sensors = [s for s in sensors if s.sensor_id in onewire_map]
     pms_sensors = [s for s in sensors if s.sensor_id in pms7003_map]
+    max31865_sensors = [s for s in sensors if s.sensor_id in max31865_map]
 
-    claimed = {s.sensor_id for s in modbus_sensors + onewire_sensors + pms_sensors}
+    claimed = {s.sensor_id for s in modbus_sensors + onewire_sensors + pms_sensors + max31865_sensors}
     unclaimed = [s for s in sensors if s.sensor_id not in claimed]
 
     # A sensor tracked in the manifest with interface unset/'unconfirmed'
@@ -515,24 +527,26 @@ def _build_real_sensor_source(cfg: EdgeConfig, sensors) -> CompositeSensorSource
         raise SystemExit(
             f"real mode: sensor(s) {misconfigured} declare a real interface in the "
             "`sensors` table but have no entry in the matching wiring map - add them "
-            "to edge/modbus_map.json, edge/onewire_map.json or edge/pms7003_map.json "
-            "before starting the daemon without --mock."
+            "to edge/modbus_map.json, edge/onewire_map.json, edge/pms7003_map.json, "
+            "or edge/max31865_map.json before starting the daemon without --mock."
         )
 
     log.info(
-        "real sensor source: %d modbus, %d 1-wire, %d pms7003, %d unconfirmed (skipped)",
-        len(modbus_sensors), len(onewire_sensors), len(pms_sensors), len(skipped),
+        "real sensor source: %d modbus, %d 1-wire, %d pms7003, %d max31865, %d unconfirmed (skipped)",
+        len(modbus_sensors), len(onewire_sensors), len(pms_sensors), len(max31865_sensors), len(skipped),
     )
 
     return CompositeSensorSource([
         RealModbusPoller(modbus_sensors, modbus_map),
         RealOneWirePoller(onewire_sensors, onewire_map),
         RealPMS7003Poller(pms_sensors, pms7003_map),
+        RealMAX31865Poller(max31865_sensors, max31865_map),
     ])
 
 
 async def main_async(cfg: EdgeConfig) -> None:
-    log.info("edge daemon starting: plant_id=%s mock=%s", cfg.plant_id, cfg.mock)
+    log.info("edge daemon starting: plant_id=%s hardware_mode=%s (mock=%s)",
+              cfg.plant_id, cfg.hardware_mode, cfg.mock)
 
     # Clock gate FIRST, before the manifest load and long before any
     # reading is produced. A Pi has no battery-backed RTC: after a power
@@ -583,6 +597,10 @@ async def main_async(cfg: EdgeConfig) -> None:
     watchdog = loop.create_task(watchdog_task(ctx), name="watchdog")
     dashboard = loop.create_task(dashboard_task(ctx), name="dashboard")
     background = [publisher, sync, watchdog, dashboard]
+
+    if cfg.hmi_enabled:
+        hmi_component_map = load_hmi_map(cfg.hmi_map_path())
+        background.append(loop.create_task(hmi_task(ctx, hmi_component_map), name="hmi"))
 
     try:
         await poller  # returns on ctx.shutdown OR a graceful stop-file request

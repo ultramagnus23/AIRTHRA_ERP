@@ -76,33 +76,51 @@ whether the Pi can actually reach the broker/Postgres once it's running.
   Imager. 64-bit matters for Docker: Pi 4/5 should run `linux/arm64`
   images; an older Pi 3 / Zero 2 W on 32-bit OS needs `linux/arm/v7`
   instead (noted again in the build command below).
-- **Enable the 1-Wire interface** for the DS18B20 probes. Edit
-  `/boot/firmware/config.txt` (older OS versions: `/boot/config.txt`) and
-  add:
+- **Enable 1-Wire on GPIO2 (physical pin 3)** for the 15 DS18B20 probes.
+  REVERTED 2026-09-13 from an earlier 3-bus (GPIO4/17/27) design back to a
+  single bus on GPIO2, per the Delhi engineer's schematic - GPIO2 has a
+  **built-in 1.8kΩ pull-up already on the Pi board** (it's normally the
+  I2C SDA line), so **no external pull-up resistor is needed** for this
+  bus. Trade-off, made deliberately: this means the Pi's I2C bus (GPIO2/3)
+  is NOT available for anything else - confirmed the 20x4 I2C LCD in the
+  BOM is not being used on this build. If that ever changes, 1-Wire needs
+  to move to a different GPIO (e.g. back to the 3-bus GPIO4/17/27 split,
+  still supported by the code - see edge/onewire_map.json's `bus` field)
+  and a real external 4.7kΩ pull-up added back.
+  Edit `/boot/firmware/config.txt` (older OS versions: `/boot/config.txt`)
+  and add:
   ```
-  dtoverlay=w1-gpio
+  dtoverlay=w1-gpio,gpiopin=2
   ```
-  This uses GPIO4 by default, matching the plant BOM. Reboot after adding
-  it, then confirm probes are visible on the **host** (not yet in a
-  container):
+  Reboot after adding this, then confirm probes are visible on the
+  **host** (not yet in a container):
   ```bash
   ls /sys/bus/w1/devices
   ```
-  You should see one `28-...` entry per DS18B20 currently wired up, plus a
-  `w1_bus_master1` entry. If nothing but the bus master shows up, the
-  probes aren't wired correctly yet (or the overlay didn't load) - fix
-  this before going any further, since `edge/onewire_map.json` needs
-  these exact ROM ids.
-- **Enable the UART** for the PMS7003 if it's wired to the Pi's built-in
-  serial pins (GPIO14/15) rather than a USB-serial adapter: in
-  `raspi-config` → Interface Options → Serial Port, answer "No" to login
-  shell over serial and "Yes" to enable the serial hardware. The port is
-  then `/dev/serial0` (symlinked to `/dev/ttyAMA0` or `/dev/ttyS0`
-  depending on Pi model - check with `ls -l /dev/serial0`).
-- **Identify the RS-485 adapters**: plug in both SmartElex USB-to-RS485
-  converters, then `ls /dev/ttyUSB*` - note which is which (they can swap
-  order across reboots if unplugged/replugged; see the note in
-  `docker-compose.pi.yml`).
+  You should see one `28-...` entry per DS18B20 currently wired up, plus
+  a `w1_bus_master1` entry. If only the bus master shows up with no
+  `28-...` entries, wiring needs checking before going further, since
+  `edge/onewire_map.json` needs each probe's exact ROM id.
+- **Enable the UART for the SmartElex HMI touchscreen** - GPIO14/15 is
+  permanently dedicated to this screen on this plant, not the PMS7003 (see
+  below). In `raspi-config` → Interface Options → Serial Port, answer "No"
+  to login shell over serial and "Yes" to enable the serial hardware. The
+  port is then `/dev/serial0` (symlinked to `/dev/ttyAMA0` or `/dev/ttyS0`
+  depending on Pi model - check with `ls -l /dev/serial0`); this is
+  `HMI_PORT` in `.env.pi`.
+- **Identify the RS-485 adapters and the PMS7003's USB-TTL adapter**: plug
+  in both SmartElex USB-to-RS485 converters plus the PMS7003's own
+  USB-to-TTL adapter (it needs one now, since GPIO14/15 is taken by the
+  HMI screen above), then `ls /dev/ttyUSB*` - note which is which (USB
+  enumeration order can swap across reboots if adapters are ever
+  unplugged/replugged; see the note in `docker-compose.pi.yml`).
+- **Enable SPI** for the two MAX31865/PT100 amplifiers (TE-08, TE-09):
+  `raspi-config` → Interface Options → SPI → Yes, then reboot. Confirm:
+  ```bash
+  ls /dev/spidev*
+  ```
+  You should see `/dev/spidev0.0` (CE0, physical pin 24, TE-08) and
+  `/dev/spidev0.1` (CE1, physical pin 26, TE-09).
 
 ## 2. Install Docker on the Pi
 
@@ -228,7 +246,7 @@ docker run --rm -it \
   -v $(pwd)/edge/onewire_map.json:/app/edge/onewire_map.json:ro \
   -v $(pwd)/edge/pms7003_map.json:/app/edge/pms7003_map.json:ro \
   -v /sys/bus/w1/devices:/sys/bus/w1/devices:ro \
-  --device=/dev/ttyUSB0 --device=/dev/ttyUSB1 --device=/dev/ttyAMA0 \
+  --device=/dev/ttyUSB0 --device=/dev/ttyUSB1 --device=/dev/ttyUSB2 \
   --entrypoint python \
   airthra-edge:latest edge/test_real_pollers.py --plant-id goa_pilot_01
 ```
@@ -240,9 +258,15 @@ itself.
 ## 7. Run for real
 
 ```bash
-docker compose -f docker-compose.pi.yml up -d
+docker compose -f docker-compose.pi.yml up -d --build
 docker compose -f docker-compose.pi.yml logs -f
 ```
+
+`--build` rebuilds from `edge/Dockerfile` first (the compose file's
+`build:` block points at it) - no separate manual `docker build` step
+needed at this point, unlike step 3's Option B, which still needs the
+bare `docker build` command since no compose file/`.env.pi` exist yet
+that early.
 
 `restart: unless-stopped` in `docker-compose.pi.yml` means it comes back
 up automatically after a Pi reboot or crash. The daemon's own watchdog
@@ -254,12 +278,15 @@ container that's alive but stuck (bad clock, full disk, backed-up queue).
 
 ## 8. Updating the code later
 
-Rebuild (Option A or B from step 3) with a new tag, then:
-
 ```bash
-docker compose -f docker-compose.pi.yml pull   # if using a registry
-docker compose -f docker-compose.pi.yml up -d  # recreates the container on the new image
+git pull
+docker compose -f docker-compose.pi.yml up -d --build
 ```
+
+One step: `--build` picks up the new code and recreates the container on
+it. (If you cross-built and pushed to a registry instead per step 3's
+Option A, `docker compose -f docker-compose.pi.yml pull` first, then
+`up -d` without `--build`.)
 
 `edge_cache`/`edge_data` are named volumes, not part of the image, so the
 SQLite offline buffer and manifest cache survive this untouched.

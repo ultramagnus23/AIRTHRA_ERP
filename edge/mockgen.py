@@ -356,16 +356,28 @@ class OneWireDeviceMap:
     """Wiring for one DS18B20 probe."""
 
     device_id: str  # ROM id as it appears under /sys/bus/w1/devices, e.g. "28-000005e3d3ff"
+    # Descriptive only - which of the (potentially several) independent
+    # 1-Wire buses this probe is physically on, e.g. "gas_path",
+    # "solvent_loop", "product_utility" (the plant's 3-bus split - see
+    # edge/DEPLOY.md). Reads always work by ROM id regardless of this
+    # value; it exists purely so a failure can be attributed to a specific
+    # physical bus/wire run instead of just "some probe, somewhere" - see
+    # RealOneWirePoller.read()'s log messages and test_real_pollers.py,
+    # which groups its report by this field.
+    bus: str = "unspecified"
 
 
 def load_onewire_map(path: Path) -> Dict[str, OneWireDeviceMap]:
     """Loads {sensor_id: OneWireDeviceMap} from a JSON file shaped like:
-    {"temp_reactor_01": {"device_id": "28-000005e3d3ff"}, ...}
+    {"temp_reactor_01": {"device_id": "28-000005e3d3ff", "bus": "gas_path"}, ...}
     Find each probe's ROM id with `ls /sys/bus/w1/devices` after enabling
-    the w1-gpio/w1-therm overlays (dtoverlay=w1-gpio in /boot/config.txt,
-    GPIO4 by default) — DS18B20s have no address pins, so with 15 of them
-    on one bus, ROM id is the only way to tell which probe is which; label
-    physically as you wire each one and read its id before moving to the next.
+    the w1-gpio/w1-therm overlays for however many independent 1-Wire
+    buses are in use (dtoverlay=w1-gpio,gpiopin=N in /boot/firmware/
+    config.txt, one line per bus - see edge/DEPLOY.md) — DS18B20s have no
+    address pins, so ROM id is the only way to tell probes apart, even
+    across multiple buses (all buses show up together under the same
+    /sys/bus/w1/devices directory); label physically as you wire each one
+    and read its id before moving to the next.
     """
     data = json.loads(path.read_text(encoding="utf-8"))
     return {
@@ -403,6 +415,15 @@ class RealOneWirePoller:
     triggers a fresh ~750ms conversion in the kernel driver, which blocks,
     so it's pushed into a thread via asyncio.to_thread to avoid stalling the
     event loop the Modbus/PMS7003 pollers share.
+
+    Works unchanged whether all probes share one physical 1-Wire bus or
+    are split across several independent ones (e.g. this plant's 3-bus
+    gas/solvent/utility split) - Linux exposes every bus's devices under
+    the same /sys/bus/w1/devices directory, and reads are always by ROM
+    id. The only bus-awareness here is cosmetic: OneWireDeviceMap.bus gets
+    included in log messages so a failure reads as "probe on gas_path
+    failed" instead of an anonymous ROM id, making it obvious which
+    physical wire run to go check.
     """
 
     def __init__(
@@ -422,9 +443,16 @@ class RealOneWirePoller:
     def sensor_ids(self) -> List[str]:
         return list(self._sensors.keys())
 
+    def bus_for(self, sensor_id: str) -> str:
+        """The descriptive bus label (e.g. "gas_path") a sensor was
+        assigned in onewire_map.json - for grouping results by physical
+        bus, see test_real_pollers.py."""
+        return self._map[sensor_id].bus
+
     async def read(self, sensor_id: str) -> Tuple[Optional[float], int]:
         spec = self._sensors[sensor_id]
-        device_id = self._map[sensor_id].device_id
+        entry = self._map[sensor_id]
+        device_id = entry.device_id
 
         try:
             value = await asyncio.to_thread(self._read_sync, device_id)
@@ -432,11 +460,12 @@ class RealOneWirePoller:
             # The device's sysfs entry doesn't exist at all - wrong/typo'd
             # ROM id in onewire_map.json, the probe fell off the bus, or the
             # w1-gpio/w1-therm overlays aren't loaded yet.
-            log.warning("onewire: device %s not found for %s (bad ROM id, or probe offline)",
-                        device_id, sensor_id)
+            log.warning("onewire: device %s not found for %s (bus=%s) - bad ROM id, "
+                        "or probe offline", device_id, sensor_id, entry.bus)
             return None, q.COMM_ERROR
         except Exception:
-            log.warning("onewire: read failed for %s (device=%s)", sensor_id, device_id)
+            log.warning("onewire: read failed for %s (bus=%s, device=%s)",
+                        sensor_id, entry.bus, device_id)
             return None, q.COMM_ERROR
 
         if value is None:

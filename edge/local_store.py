@@ -33,11 +33,14 @@ CREATE TABLE IF NOT EXISTS local_readings (
     ts            TEXT NOT NULL,
     value         REAL,
     quality_flag  INTEGER NOT NULL,
-    -- 'mock' (edge/mockgen.py's simulator) or 'real' (an actual poller
-    -- reading physical hardware) - see daemon.py's _poll_once(), which
-    -- sets this from cfg.mock. Exists so nobody has to guess, from the
-    -- dashboard, whether what they're looking at is simulated or real.
-    source        TEXT NOT NULL DEFAULT 'real'
+    -- 'mock' (edge/mockgen.py's simulator) or 'hardware' (an actual
+    -- poller reading physical hardware) - see daemon.py's _poll_once(),
+    -- which sets this from cfg.mock/cfg.hardware_mode. Exists so nobody
+    -- has to guess, from the dashboard, whether what they're looking at
+    -- is simulated or real. Older rows may say 'real' instead of
+    -- 'hardware' (pre-rename) - the dashboard treats anything not
+    -- literally 'mock' as non-mock, so this doesn't need a data migration.
+    source        TEXT NOT NULL DEFAULT 'hardware'
 );
 CREATE INDEX IF NOT EXISTS idx_local_readings_ts ON local_readings(ts);
 CREATE INDEX IF NOT EXISTS idx_local_readings_sensor ON local_readings(sensor_id, id);
@@ -64,7 +67,7 @@ class LocalReadingsStore:
         await cursor.close()
         if "source" not in columns:
             await self._conn.execute(
-                "ALTER TABLE local_readings ADD COLUMN source TEXT NOT NULL DEFAULT 'real'"
+                "ALTER TABLE local_readings ADD COLUMN source TEXT NOT NULL DEFAULT 'hardware'"
             )
             await self._conn.commit()
 
@@ -121,13 +124,70 @@ class LocalReadingsStore:
         recently" without any cloud/network dependency at all."""
         assert self._conn is not None
         cursor = await self._conn.execute(
-            "SELECT ts, value, quality_flag FROM local_readings "
+            "SELECT ts, value, quality_flag, source FROM local_readings "
             "WHERE sensor_id = ? ORDER BY id DESC LIMIT ?",
             (sensor_id, limit),
         )
         rows = await cursor.fetchall()
         await cursor.close()
-        return [{"ts": row[0], "value": row[1], "quality_flag": row[2]} for row in rows]
+        return [
+            {"ts": row[0], "value": row[1], "quality_flag": row[2], "source": row[3]}
+            for row in rows
+        ]
+
+    async def count_range(self, start: Optional[str] = None, end: Optional[str] = None) -> int:
+        """Same filtering as export_all(), but just the row count - lets
+        the dashboard show "this download is ~N readings / ~M MB" before
+        actually building and transferring the full export."""
+        assert self._conn is not None
+        clauses = []
+        params: List[str] = []
+        if start:
+            clauses.append("ts >= ?")
+            params.append(start)
+        if end:
+            clauses.append("ts <= ?")
+            params.append(end)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        cursor = await self._conn.execute(f"SELECT COUNT(*) FROM local_readings {where}", params)
+        row = await cursor.fetchone()
+        await cursor.close()
+        return int(row[0]) if row else 0
+
+    async def export_all(self, start: Optional[str] = None, end: Optional[str] = None) -> List[Dict]:
+        """Rows currently retained (bounded by retention_days, so this is
+        never unbounded regardless of range), oldest first - backs the
+        dashboard's "download history" button. start/end are ISO timestamp
+        strings (inclusive/exclusive respectively); either or both may be
+        omitted to leave that side of the range open."""
+        assert self._conn is not None
+        clauses = []
+        params: List[str] = []
+        if start:
+            clauses.append("ts >= ?")
+            params.append(start)
+        if end:
+            clauses.append("ts <= ?")
+            params.append(end)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        cursor = await self._conn.execute(
+            f"SELECT plant_id, sensor_id, ts, value, quality_flag, source "
+            f"FROM local_readings {where} ORDER BY id ASC",
+            params,
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+        return [
+            {
+                "plant_id": row[0],
+                "sensor_id": row[1],
+                "ts": row[2],
+                "value": row[3],
+                "quality_flag": row[4],
+                "source": row[5],
+            }
+            for row in rows
+        ]
 
     async def count(self) -> int:
         assert self._conn is not None

@@ -6,12 +6,18 @@ automatically alongside the daemon's other tasks and is reachable at
 http://<pi-ip>:8080 (or http://localhost:8080 on the Pi's own screen, via
 Raspberry Pi Connect's Screen Sharing) from the moment the container is up.
 
+Routes: `/` (the live table), `/api/latest` (JSON backing it),
+`/api/history/<sensor_id>?limit=N` (recent readings for one sensor),
+`/api/export` (every retained row, or a `?from=&to=` window, as a
+one-click file download), and `/api/export/count` (a cheap row-count/
+size-estimate for that same range, used to warn before a big download).
+
 Implemented with a hand-rolled asyncio HTTP server (stdlib `asyncio.
 start_server` only) rather than pulling in FastAPI/aiohttp - edge/
 requirements.txt is deliberately kept small (see its own docstring) since
-this whole image only exists to run on the Pi; a debugging page for three
-routes doesn't justify a new dependency. Only GET is supported, which is
-all a read-only dashboard needs.
+this whole image only exists to run on the Pi; a handful of read-only
+debugging routes doesn't justify a new dependency. Only GET is supported,
+which is all a read-only dashboard needs.
 """
 from __future__ import annotations
 
@@ -19,11 +25,18 @@ import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING
+from urllib.parse import unquote, urlsplit
 
 if TYPE_CHECKING:
     from edge.daemon import Context
 
 logger = logging.getLogger("edge.dashboard")
+
+# Empirically measured (json.dumps output for one reading row, compact
+# separators, no indent - see export_all()'s shape) rather than computed
+# exactly, since computing it exactly would mean building the export just
+# to measure it - the entire point of this estimate is to avoid that.
+_AVG_BYTES_PER_ROW = 165
 
 _PAGE = """<!doctype html>
 <html>
@@ -51,13 +64,29 @@ _PAGE = """<!doctype html>
   #source-banner.real { display: block; background: #1f6f43; color: #d1f7e0; }
   .src { font-size: 10px; padding: 1px 5px; border-radius: 8px; margin-left: 6px; }
   .src.mock { background: #7d2d1a; color: #ffdcd1; }
-  .src.real { background: #1f6f43; color: #d1f7e0; }
+  .src.hardware, .src.real { background: #1f6f43; color: #d1f7e0; }
+  #export-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; padding: 10px 12px; background: #161b22; border: 1px solid #21262d; border-radius: 8px; }
+  #export-panel label { font-size: 12px; color: #8b949e; display: flex; flex-direction: column; gap: 3px; }
+  #export-panel input[type="datetime-local"] { background: #0b0f14; color: #e6edf3; border: 1px solid #30363d; border-radius: 4px; padding: 4px 6px; font-size: 12px; }
+  #export-btn { display: inline-block; padding: 8px 14px; background: #238636; color: #fff; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; align-self: flex-end; }
+  #export-btn:hover { background: #2ea043; }
+  #export-clear { background: none; border: none; color: #8b949e; font-size: 12px; text-decoration: underline; cursor: pointer; align-self: flex-end; padding: 8px 0; }
+  #export-size { width: 100%; font-size: 12px; color: #8b949e; }
+  #export-size.warn { color: #f0883e; font-weight: 600; }
+  #export-size.danger { color: #f85149; font-weight: 700; }
 </style>
 </head>
 <body>
 <h1>Airthra Edge - Local Debug View</h1>
 <div class="sub" id="plant"></div>
 <div id="source-banner"></div>
+<div id="export-panel">
+  <label>From <input type="datetime-local" id="export-from"></label>
+  <label>To <input type="datetime-local" id="export-to"></label>
+  <a id="export-btn" href="/api/export" download="airthra_readings_export.json">Download history (JSON)</a>
+  <button id="export-clear" type="button">clear range (download everything)</button>
+  <div id="export-size">checking size...</div>
+</div>
 <div id="status">connecting...</div>
 <table>
   <thead><tr><th>Sensor</th><th>Value</th><th>Status</th><th>Source</th><th>Last update</th></tr></thead>
@@ -107,17 +136,80 @@ async function refresh() {
 }
 refresh();
 setInterval(refresh, 1000);
+
+// Date-range picker for the export button - rebuilds its href from the
+// two datetime-local inputs whenever either changes, so the browser's
+// native "download" behaviour (triggered by the <a download> attribute)
+// still works with no page reload or form submit needed.
+const exportBtn = document.getElementById("export-btn");
+const fromInput = document.getElementById("export-from");
+const toInput = document.getElementById("export-to");
+
+function currentRangeParams() {
+  const params = new URLSearchParams();
+  // datetime-local gives local time with no timezone suffix - appending
+  // one makes it parse as a real instant rather than being silently
+  // interpreted as UTC or the server's zone.
+  if (fromInput.value) params.set("from", new Date(fromInput.value).toISOString());
+  if (toInput.value) params.set("to", new Date(toInput.value).toISOString());
+  return params;
+}
+
+function updateExportHref() {
+  const qs = currentRangeParams().toString();
+  exportBtn.href = "/api/export" + (qs ? "?" + qs : "");
+}
+
+function formatBytes(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(0) + " KB";
+  return (n / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+// Cheap COUNT-based estimate (edge/dashboard.py's /api/export/count) so
+// the size is known BEFORE clicking download, not discovered mid-transfer
+// on a slow remote connection.
+async function updateExportSize() {
+  const sizeEl = document.getElementById("export-size");
+  try {
+    const qs = currentRangeParams().toString();
+    const res = await fetch("/api/export/count" + (qs ? "?" + qs : ""));
+    const data = await res.json();
+    const mb = data.estimated_bytes / (1024 * 1024);
+    sizeEl.textContent = data.count.toLocaleString() + " readings, ~" + formatBytes(data.estimated_bytes) + " estimated";
+    sizeEl.className = mb > 100 ? "danger" : mb > 20 ? "warn" : "";
+    if (mb > 20) {
+      sizeEl.textContent += mb > 100
+        ? " - this is a large download, likely slow on a remote/mobile connection. Pick a narrower time range if possible."
+        : " - noticeable on a slow connection; a narrower range downloads faster.";
+    }
+  } catch (e) {
+    sizeEl.textContent = "";
+  }
+}
+
+fromInput.addEventListener("change", () => { updateExportHref(); updateExportSize(); });
+toInput.addEventListener("change", () => { updateExportHref(); updateExportSize(); });
+document.getElementById("export-clear").addEventListener("click", () => {
+  fromInput.value = "";
+  toInput.value = "";
+  updateExportHref();
+  updateExportSize();
+});
+updateExportSize();
+setInterval(updateExportSize, 5000);
 </script>
 </body>
 </html>
 """
 
 
-def _http_response(status: str, content_type: str, body: bytes) -> bytes:
+def _http_response(status: str, content_type: str, body: bytes, extra_headers: str = "") -> bytes:
     headers = (
         f"HTTP/1.1 {status}\r\n"
         f"Content-Type: {content_type}\r\n"
         f"Content-Length: {len(body)}\r\n"
+        f"{extra_headers}"
         "Connection: close\r\n"
         "\r\n"
     ).encode("ascii")
@@ -135,7 +227,13 @@ async def _handle_client(ctx: "Context", reader: asyncio.StreamReader, writer: a
                 break
 
         parts = request_line.decode("latin-1").split()
-        path = parts[1] if len(parts) >= 2 else "/"
+        raw_path = parts[1] if len(parts) >= 2 else "/"
+        split = urlsplit(raw_path)
+        path = unquote(split.path)
+        query = {
+            unquote(k): unquote(v)
+            for k, v in (pair.split("=", 1) for pair in split.query.split("&") if "=" in pair)
+        }
 
         if path == "/" or path == "/index.html":
             writer.write(_http_response("200 OK", "text/html; charset=utf-8", _PAGE.encode("utf-8")))
@@ -149,6 +247,61 @@ async def _handle_client(ctx: "Context", reader: asyncio.StreamReader, writer: a
                 }
             ).encode("utf-8")
             writer.write(_http_response("200 OK", "application/json", body))
+        elif path == "/api/health":
+            # Per-device health (edge/health.py) - online/offline,
+            # last_seen, consecutive_failures per sensor. Answers "is THIS
+            # sensor healthy right now", a different question from
+            # /api/latest's "what's its current value".
+            body = json.dumps(
+                {"plant_id": ctx.cfg.plant_id, "hardware_mode": ctx.cfg.hardware_mode,
+                 "devices": ctx.health.snapshot()}
+            ).encode("utf-8")
+            writer.write(_http_response("200 OK", "application/json", body))
+        elif path.startswith("/api/history/"):
+            sensor_id = path[len("/api/history/"):]
+            try:
+                limit = max(1, min(int(query.get("limit", "200")), 10_000))
+            except ValueError:
+                limit = 200
+            body = json.dumps(
+                {"sensor_id": sensor_id, "readings": await ctx.local_store.history(sensor_id, limit)}
+            ).encode("utf-8")
+            writer.write(_http_response("200 OK", "application/json", body))
+        elif path == "/api/export/count":
+            # Cheap (indexed COUNT, no row data built or transferred) - lets
+            # the dashboard show an estimated download size before the
+            # button is actually clicked, so a multi-hundred-MB export
+            # doesn't come as a surprise on a slow/remote connection.
+            start = query.get("from") or None
+            end = query.get("to") or None
+            count = await ctx.local_store.count_range(start, end)
+            body = json.dumps({"count": count, "estimated_bytes": count * _AVG_BYTES_PER_ROW}).encode("utf-8")
+            writer.write(_http_response("200 OK", "application/json", body))
+        elif path == "/api/export":
+            # Everything currently retained (bounded by LOCAL_RETENTION_DAYS,
+            # never unbounded) by default, or a specific ?from=&to= window -
+            # the dashboard's "download history" button, with an optional
+            # date-range picker. Content-Disposition makes the browser save
+            # it as a file instead of just displaying it inline; the
+            # <a download> on the button is a redundant hint for the same
+            # behaviour.
+            start = query.get("from") or None
+            end = query.get("to") or None
+            body = json.dumps(
+                {
+                    "plant_id": ctx.cfg.plant_id,
+                    "range": {"from": start, "to": end},
+                    "readings": await ctx.local_store.export_all(start, end),
+                }
+            ).encode("utf-8")
+            writer.write(
+                _http_response(
+                    "200 OK",
+                    "application/json",
+                    body,
+                    extra_headers='Content-Disposition: attachment; filename="airthra_readings_export.json"\r\n',
+                )
+            )
         else:
             writer.write(_http_response("404 Not Found", "text/plain", b"not found"))
         await writer.drain()
