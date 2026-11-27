@@ -1,6 +1,7 @@
 //! Touchscreen driver: reads touches, writes text fields.
 
 pub mod layout;
+pub mod project;
 pub mod protocol;
 pub mod ui;
 

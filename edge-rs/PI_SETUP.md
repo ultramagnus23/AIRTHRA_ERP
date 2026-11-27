@@ -92,8 +92,8 @@ Edit wiring maps in `/opt/airthra-edge/maps/`, then restart the service.
 | RX | 8 (GPIO14, TXD) |
 
 Measure the screen's TX voltage before connecting it. Near 5 V needs a level
-shifter. Build the layout from [hmi/BUILD_SHEET.md](hmi/BUILD_SHEET.md); test
-with `hmi-probe` first (see [README.md](README.md)).
+shifter. Load the layout as in
+[hmi/SCREEN_QUICKSTART.md](hmi/SCREEN_QUICKSTART.md).
 
 ### DS18B20 temperature probes (15)
 

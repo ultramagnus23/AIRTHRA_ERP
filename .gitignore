@@ -18,3 +18,7 @@ tests/_p1_gate_logs/
 # Rust edge daemon
 edge-rs/target/
 edge-rs/data/
+
+# Written by Robu's HMI Editor next to the screen project
+edge-rs/hmi/*_images/
+edge-rs/hmi/*.TFT

@@ -14,10 +14,11 @@ The SmartElex Basic 4.0" is **not a Nextion**. It uses Robu's HMI Editor and
 its own protocol ([manual](https://robu.in/wp-content/uploads/2025/01/Robus-HMI-Display-Editor-Guide.pdf)).
 The Python `edge/hmi.py` sends Nextion commands, so it cannot drive this screen.
 
-The layout is fixed on the screen, so you build it once in the editor from
-[hmi/BUILD_SHEET.md](hmi/BUILD_SHEET.md) ([preview](hmi/preview.svg)), generate
-the `.tft`, copy it to the root of the SD card and power the screen with the
-card inserted.
+The layout is stored on the screen. `hmi-layout` writes
+[hmi/airthra.hmi](hmi/airthra.hmi); open it in the editor, choose Generate
+Output, copy the `.TFT` to the root of the SD card and power the screen with the
+card inserted. Step by step: [hmi/SCREEN_QUICKSTART.md](hmi/SCREEN_QUICKSTART.md).
+([build sheet](hmi/BUILD_SHEET.md), [preview](hmi/preview.svg))
 
 ### Wiring
 
@@ -32,11 +33,10 @@ card inserted.
 > the manual does not state the screen's logic level. If it idles near 5 V, use
 > a level shifter or divider.
 
-### Check the link before building all four pages
+### Check the link
 
-The manual leaves some behaviour unstated. Make a test project with, on page 0,
-one RealTimeText (`txt_maxl`=12) and one SquareButton (`value1`=1, `value2`=1).
-Flash it, stop the service, and run:
+The manual leaves some behaviour unstated. With the layout on the screen, stop
+the service and run:
 
 ```bash
 HMI_PORT=/dev/serial0 ./target/release/airthra-edge hmi-probe
@@ -102,8 +102,7 @@ bad, clock state, uptime, and the six most recent events (times in UTC).
 | `cloud: login refused` | Wrong MQTT username or password |
 | `cloud: no ack, resending` | Broker did not confirm a message; it is kept and resent |
 
-A screen layout built before this page existed needs the `STATUS` button, the
-narrower live-page buttons and page 3 added. Existing widget IDs are unchanged.
+A screen loaded before this page existed needs the new `.TFT`.
 
 ## What the screen says when a sensor fails
 

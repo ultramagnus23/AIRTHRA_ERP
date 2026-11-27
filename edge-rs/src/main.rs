@@ -18,7 +18,7 @@ const USAGE: &str = "usage: airthra-edge <command>
   run [--mock]       poll sensors, drive the screen, publish to the cloud
   check [--mock]     read every sensor once and print why any of them fail
   hmi-probe          test the screen link: send a value, print what comes back
-  hmi-layout [DIR]   write the screen build sheet and preview image";
+  hmi-layout [DIR]   write the screen editor project, build sheet and preview";
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -355,8 +355,9 @@ fn write_layout(dir: &Path, config: &Config) -> Result<()> {
         dir.join("preview.svg"),
         layout.preview_svg(&ui.render(&state)),
     )?;
+    std::fs::write(dir.join("airthra.hmi"), hmi::project::file(&layout))?;
     println!(
-        "wrote {} and preview.svg",
+        "wrote airthra.hmi, {} and preview.svg",
         dir.join("BUILD_SHEET.md").display()
     );
     Ok(())
