@@ -2,7 +2,7 @@
 
 # Screen build sheet (SmartElex Basic 4.0", Robu HMI Editor)
 
-New project: Basic, `SME40_480320RT` (320x480), orientation `0` (portrait). Add three pages. On each page add the widgets **in the order listed**, because the editor assigns IDs in that order. Check the `id` it shows against the table.
+New project: Basic, `SME40_480320RT` (320x480), orientation `0` (portrait). Add four pages. On each page add the widgets **in the order listed**, because the editor assigns IDs in that order. Check the `id` it shows against the table.
 
 - **RealTimeText**: set `txt_maxl` exactly as listed. Font 1 (use 0 if clipped).
 - **SquareButton (to Pi)**: `value1`=1, `value2`=1, `page_switch`=0, `b_col2` the same as `b_col`.
@@ -42,9 +42,10 @@ New project: Basic, `SME40_480320RT` (320x480), orientation `0` (portrait). Add 
 | 27 | RealTimeText | 025 | name7 | 4 | 371 | 130 | 40 | txt_maxl=12 |
 | 28 | RealTimeText | 026 | value7 | 138 | 371 | 100 | 40 | txt_maxl=9 |
 | 29 | RealTimeText | 027 | state7 | 242 | 371 | 74 | 40 | txt_maxl=8 |
-| 30 | SquareButton (to Pi) | 000 | prev | 4 | 424 | 96 | 52 | txt=`< PREV` |
-| 31 | SquareButton (to Pi) | 001 | next | 112 | 424 | 96 | 52 | txt=`NEXT >` |
-| 32 | SquareButton (page) | 002 | to_wifi | 220 | 424 | 96 | 52 | txt=`WI-FI`, next_page=001 |
+| 30 | SquareButton (to Pi) | 000 | prev | 4 | 424 | 75 | 52 | txt=`< PREV` |
+| 31 | SquareButton (to Pi) | 001 | next | 83 | 424 | 75 | 52 | txt=`NEXT >` |
+| 32 | SquareButton (page) | 002 | to_wifi | 162 | 424 | 75 | 52 | txt=`WI-FI`, next_page=001 |
+| 33 | SquareButton (page) | 003 | to_status | 241 | 424 | 75 | 52 | txt=`STATUS`, next_page=003 |
 
 ## Page 1: Wi-Fi networks
 
@@ -135,3 +136,45 @@ New project: Basic, `SME40_480320RT` (320x480), orientation `0` (portrait). Add 
 | 51 | SquareButton (page) | 003 | back | 4 | 426 | 102 | 50 | txt=`< BACK`, next_page=001 |
 | 52 | SquareButton (to Pi) | 004 | show | 109 | 426 | 102 | 50 | txt=`SHOW` |
 | 53 | SquareButton (to Pi) | 005 | join | 214 | 426 | 102 | 50 | txt=`JOIN` |
+
+## Page 3: Pi status
+
+| # | Widget | id | Name | x | y | w | h | Settings |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Text | 000 | stitle | 8 | 6 | 120 | 22 | txt=`PI STATUS` |
+| 2 | Text | 001 | s_cloud_label | 8 | 34 | 120 | 20 | txt=`CLOUD` |
+| 3 | RealTimeText | 000 | s_cloud | 140 | 34 | 176 | 20 | txt_maxl=12 |
+| 4 | Text | 002 | s_sent_label | 8 | 58 | 120 | 20 | txt=`SENT` |
+| 5 | RealTimeText | 001 | s_sent | 140 | 58 | 176 | 20 | txt_maxl=12 |
+| 6 | Text | 003 | s_queued_label | 8 | 82 | 120 | 20 | txt=`QUEUED` |
+| 7 | RealTimeText | 002 | s_queued | 140 | 82 | 176 | 20 | txt_maxl=12 |
+| 8 | Text | 004 | s_last_label | 8 | 106 | 120 | 20 | txt=`LAST SEND` |
+| 9 | RealTimeText | 003 | s_last | 140 | 106 | 176 | 20 | txt_maxl=12 |
+| 10 | Text | 005 | s_recorded_label | 8 | 130 | 120 | 20 | txt=`RECORDED` |
+| 11 | RealTimeText | 004 | s_recorded | 140 | 130 | 176 | 20 | txt_maxl=12 |
+| 12 | Text | 006 | s_sensors_label | 8 | 154 | 120 | 20 | txt=`SENSORS` |
+| 13 | RealTimeText | 005 | s_sensors | 140 | 154 | 176 | 20 | txt_maxl=12 |
+| 14 | Text | 007 | s_clock_label | 8 | 178 | 120 | 20 | txt=`PI CLOCK` |
+| 15 | RealTimeText | 006 | s_clock | 140 | 178 | 176 | 20 | txt_maxl=12 |
+| 16 | Text | 008 | s_uptime_label | 8 | 202 | 120 | 20 | txt=`UPTIME` |
+| 17 | RealTimeText | 007 | s_uptime | 140 | 202 | 176 | 20 | txt_maxl=12 |
+| 18 | Text | 009 | etitle | 8 | 230 | 160 | 20 | txt=`EVENTS (UTC)` |
+| 19 | RealTimeText | 008 | log0_0 | 16 | 256 | 96 | 22 | txt_maxl=12 |
+| 20 | RealTimeText | 009 | log0_1 | 112 | 256 | 96 | 22 | txt_maxl=12 |
+| 21 | RealTimeText | 010 | log0_2 | 208 | 256 | 96 | 22 | txt_maxl=12 |
+| 22 | RealTimeText | 011 | log1_0 | 16 | 283 | 96 | 22 | txt_maxl=12 |
+| 23 | RealTimeText | 012 | log1_1 | 112 | 283 | 96 | 22 | txt_maxl=12 |
+| 24 | RealTimeText | 013 | log1_2 | 208 | 283 | 96 | 22 | txt_maxl=12 |
+| 25 | RealTimeText | 014 | log2_0 | 16 | 310 | 96 | 22 | txt_maxl=12 |
+| 26 | RealTimeText | 015 | log2_1 | 112 | 310 | 96 | 22 | txt_maxl=12 |
+| 27 | RealTimeText | 016 | log2_2 | 208 | 310 | 96 | 22 | txt_maxl=12 |
+| 28 | RealTimeText | 017 | log3_0 | 16 | 337 | 96 | 22 | txt_maxl=12 |
+| 29 | RealTimeText | 018 | log3_1 | 112 | 337 | 96 | 22 | txt_maxl=12 |
+| 30 | RealTimeText | 019 | log3_2 | 208 | 337 | 96 | 22 | txt_maxl=12 |
+| 31 | RealTimeText | 020 | log4_0 | 16 | 364 | 96 | 22 | txt_maxl=12 |
+| 32 | RealTimeText | 021 | log4_1 | 112 | 364 | 96 | 22 | txt_maxl=12 |
+| 33 | RealTimeText | 022 | log4_2 | 208 | 364 | 96 | 22 | txt_maxl=12 |
+| 34 | RealTimeText | 023 | log5_0 | 16 | 391 | 96 | 22 | txt_maxl=12 |
+| 35 | RealTimeText | 024 | log5_1 | 112 | 391 | 96 | 22 | txt_maxl=12 |
+| 36 | RealTimeText | 025 | log5_2 | 208 | 391 | 96 | 22 | txt_maxl=12 |
+| 37 | SquareButton (page) | 000 | status_back | 4 | 426 | 312 | 50 | txt=`< LIVE`, next_page=000 |

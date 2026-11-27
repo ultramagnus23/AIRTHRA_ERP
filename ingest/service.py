@@ -16,6 +16,11 @@ Independent asyncio process that:
     table's PK is a uuid surrogate key with no natural-key unique
     constraint).
 
+Delivery: a message is acknowledged to the broker only after it has been
+committed to Postgres. The MQTT session is persistent, so the broker holds
+messages while this service is down. Run exactly one instance: the session
+belongs to its fixed client ID.
+
 Usage:
     python ingest/service.py
 
@@ -298,6 +303,52 @@ async def handle_message(store: Store, manifest: Manifest, stats: Stats, topic: 
 
 
 # ---------------------------------------------------------------------------
+# Delivery
+# ---------------------------------------------------------------------------
+
+# Errors caused by the message itself: retrying it can never succeed.
+_BAD_MESSAGE_ERRORS = (
+    AttributeError, KeyError, TypeError, ValueError, OverflowError, RecursionError,
+    asyncpg.DataError, asyncpg.IntegrityConstraintViolationError,
+)
+
+
+class StorageUnavailable(Exception):
+    """The message could not be stored yet. It must stay unacknowledged."""
+
+
+async def process_message(store: Store, manifest: Manifest, stats: Stats, topic: str, raw_payload: bytes) -> None:
+    """Returns once the message is safe to acknowledge: stored, or recorded as
+    a dead letter because it never can be. Otherwise raises StorageUnavailable."""
+    try:
+        try:
+            await handle_message(store, manifest, stats, topic, raw_payload)
+        except _BAD_MESSAGE_ERRORS as exc:
+            log.error("unprocessable message on %s: %r", topic, exc)
+            # NUL is the one character Postgres cannot hold in jsonb.
+            raw = raw_payload.decode("utf-8", "replace").replace("\x00", "\ufffd")
+            await store.insert_dead_letter(None, None, None, {"topic": topic, "raw": raw}, "unprocessable")
+            stats.readings_dead += 1
+    except Exception as exc:  # noqa: BLE001 - anything else is assumed temporary
+        raise StorageUnavailable(repr(exc)) from exc
+
+
+def make_client(cfg: IngestConfig) -> aiomqtt.Client:
+    client = aiomqtt.Client(
+        hostname=cfg.mqtt_host,
+        port=cfg.mqtt_port,
+        username=cfg.mqtt_username or None,
+        password=cfg.mqtt_password or None,
+        identifier="ingest-service",
+        clean_session=False,
+    )
+    # aiomqtt 2.5 has no public switch for this; without it paho acknowledges
+    # each message on receipt, before it is stored.
+    client._client.manual_ack_set(True)
+    return client
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -324,23 +375,23 @@ async def main_async(cfg: IngestConfig) -> None:
     try:
         while True:
             try:
-                async with aiomqtt.Client(
-                    hostname=cfg.mqtt_host,
-                    port=cfg.mqtt_port,
-                    username=cfg.mqtt_username or None,
-                    password=cfg.mqtt_password or None,
-                    identifier="ingest-service",
-                ) as client:
+                async with make_client(cfg) as client:
                     log.info("connected to mqtt://%s:%d, subscribing", cfg.mqtt_host, cfg.mqtt_port)
                     await client.subscribe(cfg.readings_topic, qos=1)
                     await client.subscribe(cfg.backfill_topic, qos=1)
                     await client.subscribe(cfg.setpoints_topic, qos=1)
                     async for message in client.messages:
-                        await handle_message(store, manifest, stats, str(message.topic), message.payload)
+                        await process_message(store, manifest, stats, str(message.topic), message.payload)
+                        client._client.ack(message.mid, message.qos)
                         if (stats.readings_ok + stats.readings_dead) % 50 == 0:
                             log.info("ingest stats: %s", stats)
             except aiomqtt.MqttError as exc:
                 log.warning("mqtt connection lost/failed (%s), retrying in %.1fs", exc, cfg.mqtt_reconnect_delay_s)
+                await asyncio.sleep(cfg.mqtt_reconnect_delay_s)
+            except StorageUnavailable as exc:
+                # Leaving the client disconnects; the broker redelivers every
+                # unacknowledged message when we reconnect.
+                log.error("storage unavailable (%s), retrying in %.1fs", exc, cfg.mqtt_reconnect_delay_s)
                 await asyncio.sleep(cfg.mqtt_reconnect_delay_s)
     finally:
         shutdown.set()

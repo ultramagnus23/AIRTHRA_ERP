@@ -295,11 +295,11 @@ class RealModbusPoller:
             try:
                 if reg.register_type == "holding":
                     result = await client.read_holding_registers(
-                        reg.register, count=reg.count, slave=reg.slave_id
+                        reg.register, count=reg.count, device_id=reg.slave_id
                     )
                 else:
                     result = await client.read_input_registers(
-                        reg.register, count=reg.count, slave=reg.slave_id
+                        reg.register, count=reg.count, device_id=reg.slave_id
                     )
             except Exception:
                 log.warning("modbus: read failed for %s (bus=%s slave=%d reg=%d)",

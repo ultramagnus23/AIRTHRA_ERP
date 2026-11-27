@@ -64,13 +64,13 @@ impl Store {
         Ok(n as u64)
     }
 
-    /// Marks everything up to `last_id` as delivered.
-    pub fn mark_sent(&self, last_id: i64) -> Result<()> {
-        self.db.execute(
+    /// Marks everything up to `last_id` as delivered; returns how many rows.
+    pub fn mark_sent(&self, last_id: i64) -> Result<u64> {
+        let changed = self.db.execute(
             "UPDATE readings SET sent = 1 WHERE sent = 0 AND id <= ?1",
             [last_id],
         )?;
-        Ok(())
+        Ok(changed as u64)
     }
 
     /// Drops delivered history older than the retention window. Undelivered

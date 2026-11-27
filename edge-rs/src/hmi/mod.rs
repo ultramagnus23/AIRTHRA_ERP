@@ -1,6 +1,7 @@
 //! Touchscreen driver: reads touches, writes text fields.
 
 pub mod layout;
+pub mod project;
 pub mod protocol;
 pub mod ui;
 
@@ -153,6 +154,16 @@ impl<P: Read + Write> Screen<P> {
     }
 }
 
+/// Wi-Fi outcomes worth showing on the status page. Never includes a password.
+fn wifi_event(response: &wifi::Response) -> Option<&'static str> {
+    match response {
+        wifi::Response::Connected(Ok(())) => Some("wifi joined"),
+        wifi::Response::Connected(Err(_)) => Some("wifi join failed"),
+        wifi::Response::Scanned(Err(_)) => Some("wifi scan failed"),
+        _ => None,
+    }
+}
+
 /// Runs the screen forever, reopening the port after any error.
 pub fn run(
     settings: Settings,
@@ -187,7 +198,12 @@ pub fn run(
             }
             loop {
                 match responses.try_recv() {
-                    Ok(response) => screen.ui.wifi_result(response),
+                    Ok(response) => {
+                        if let Some(event) = wifi_event(&response) {
+                            lock(&shared).note(event);
+                        }
+                        screen.ui.wifi_result(response);
+                    }
                     Err(TryRecvError::Empty) => break,
                     Err(TryRecvError::Disconnected) => {
                         eprintln!("hmi: Wi-Fi worker stopped");

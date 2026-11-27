@@ -1,7 +1,7 @@
 //! Screen behaviour with no I/O: touches go in, text field contents and
 //! Wi-Fi requests come out.
 
-use super::layout::{KEY_SLOTS, LIVE_ROWS, WIFI_ROWS};
+use super::layout::{KEY_SLOTS, LIVE_ROWS, LOG_COLS, LOG_ROWS, WIFI_ROWS};
 use crate::model::{Quality, SensorSpec, State};
 use crate::wifi::{Network, Request, Response, Secret};
 use std::collections::HashMap;
@@ -183,15 +183,14 @@ impl Ui {
         };
 
         // Live page.
-        set(
-            "cloud".into(),
-            if state.cloud_connected {
-                "CLOUD OK"
-            } else {
-                "CLOUD DOWN"
-            }
-            .into(),
-        );
+        let cloud = if !state.cloud_enabled {
+            "OFF"
+        } else if state.cloud_connected {
+            "OK"
+        } else {
+            "DOWN"
+        };
+        set("cloud".into(), format!("CLOUD {cloud}"));
         set(
             "pageno".into(),
             format!("{}/{}", self.live_page + 1, self.live_pages()),
@@ -204,14 +203,14 @@ impl Ui {
                 self.ssid.clone()
             },
         );
+        let good = state
+            .latest
+            .values()
+            .filter(|l| l.quality == Quality::Good && l.at.elapsed() < STALE_AFTER)
+            .count();
         let alert = if !state.clock_ok {
             "CLOCK BAD".to_string()
         } else {
-            let good = state
-                .latest
-                .values()
-                .filter(|l| l.quality == Quality::Good && l.at.elapsed() < STALE_AFTER)
-                .count();
             format!("{good}/{} OK", self.sensors.len())
         };
         set("alert".into(), alert);
@@ -227,6 +226,38 @@ impl Ui {
             set(format!("name{row}"), name);
             set(format!("value{row}"), value);
             set(format!("state{row}"), status);
+        }
+
+        // Status page.
+        set("s_cloud".into(), cloud.into());
+        set("s_sent".into(), state.published.to_string());
+        set("s_queued".into(), state.unsent.to_string());
+        set(
+            "s_last".into(),
+            state.last_publish.map_or_else(
+                || "NEVER".into(),
+                |at| format!("{} AGO", duration_text(at.elapsed())),
+            ),
+        );
+        set("s_recorded".into(), state.recorded.to_string());
+        let bad = self.sensors.len().saturating_sub(good);
+        set("s_sensors".into(), format!("{good} OK {bad} BAD"));
+        set(
+            "s_clock".into(),
+            if state.clock_ok { "OK" } else { "BAD" }.into(),
+        );
+        set(
+            "s_uptime".into(),
+            state
+                .started
+                .map_or_else(String::new, |at| duration_text(at.elapsed())),
+        );
+        for row in 0..LOG_ROWS {
+            let line = state.events.get(row).map_or("", String::as_str);
+            for col in 0..LOG_COLS {
+                let part = line.chars().skip(col * 12).take(12).collect();
+                set(format!("log{row}_{col}"), part);
+            }
         }
 
         // Network list.
@@ -304,6 +335,20 @@ fn reading_text(spec: &SensorSpec, state: &State) -> (String, String) {
         }
     };
     (value, status)
+}
+
+/// A duration in its largest two units, for example `2h 05m`.
+fn duration_text(d: Duration) -> String {
+    let s = d.as_secs();
+    if s < 60 {
+        format!("{s}s")
+    } else if s < 3600 {
+        format!("{}m {:02}s", s / 60, s % 60)
+    } else if s < 86_400 {
+        format!("{}h {:02}m", s / 3600, s % 3600 / 60)
+    } else {
+        format!("{}d {:02}h", s / 86_400, s % 86_400 / 3600)
+    }
 }
 
 fn format_value(v: f64) -> String {
@@ -440,6 +485,34 @@ mod tests {
         );
         ui.wifi_result(Response::Connected(Err("bad".into())));
         assert_eq!(ui.render(&State::default())["kmsg"], "JOIN FAILED");
+    }
+
+    #[test]
+    fn status_page_shows_processing_counters_and_events() {
+        let mut state = State {
+            clock_ok: true,
+            ..State::default()
+        };
+        let ui = Ui::new(sensors(3));
+        let screen = ui.render(&state);
+        assert_eq!(screen["cloud"], "CLOUD OFF");
+        assert_eq!(screen["s_last"], "NEVER");
+        assert_eq!(screen["s_sensors"], "0 OK 3 BAD");
+
+        state.cloud_enabled = true;
+        state.published = 42;
+        state.unsent = 7;
+        state.note("level_K2SO3_tank NO REPLY");
+        let screen = ui.render(&state);
+        assert_eq!(screen["s_cloud"], "DOWN");
+        assert_eq!(screen["s_sent"], "42");
+        assert_eq!(screen["s_queued"], "7");
+        let line: String = (0..LOG_COLS)
+            .map(|c| screen[&format!("log0_{c}")].clone())
+            .collect();
+        assert!(line.ends_with(" level_K2SO3_tank NO REPLY"), "{line}");
+        assert_eq!(screen["log1_0"], "");
+        assert_eq!(duration_text(Duration::from_secs(7500)), "2h 05m");
     }
 
     #[test]

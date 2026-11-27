@@ -1,7 +1,7 @@
 //! Readings, quality flags and the state shared between threads.
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -69,9 +69,38 @@ pub struct Reading {
 #[derive(Default)]
 pub struct State {
     pub latest: BTreeMap<String, Latest>,
+    /// False when no broker is configured, so nothing will ever be posted.
+    pub cloud_enabled: bool,
     pub cloud_connected: bool,
     pub clock_ok: bool,
+    /// Readings waiting for the broker to acknowledge them.
     pub unsent: u64,
+    /// Readings written to the local log since start.
+    pub recorded: u64,
+    /// Readings the broker has acknowledged since start.
+    pub published: u64,
+    pub last_publish: Option<Instant>,
+    pub started: Option<Instant>,
+    /// Recent events for the screen's status page, newest first.
+    pub events: VecDeque<String>,
+}
+
+/// How many events are kept for the screen.
+pub const MAX_EVENTS: usize = 20;
+
+impl State {
+    /// Records an event with its UTC time of day.
+    pub fn note(&mut self, text: impl AsRef<str>) {
+        let t = OffsetDateTime::now_utc();
+        self.events.push_front(format!(
+            "{:02}:{:02}:{:02} {}",
+            t.hour(),
+            t.minute(),
+            t.second(),
+            text.as_ref()
+        ));
+        self.events.truncate(MAX_EVENTS);
+    }
 }
 
 pub type Shared = Arc<Mutex<State>>;

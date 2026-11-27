@@ -14,10 +14,11 @@ The SmartElex Basic 4.0" is **not a Nextion**. It uses Robu's HMI Editor and
 its own protocol ([manual](https://robu.in/wp-content/uploads/2025/01/Robus-HMI-Display-Editor-Guide.pdf)).
 The Python `edge/hmi.py` sends Nextion commands, so it cannot drive this screen.
 
-The layout is fixed on the screen, so you build it once in the editor from
-[hmi/BUILD_SHEET.md](hmi/BUILD_SHEET.md) ([preview](hmi/preview.svg)), generate
-the `.tft`, copy it to the root of the SD card and power the screen with the
-card inserted.
+The layout is stored on the screen. `hmi-layout` writes
+[hmi/airthra.hmi](hmi/airthra.hmi); open it in the editor, choose Generate
+Output, copy the `.TFT` to the root of the SD card and power the screen with the
+card inserted. Step by step: [hmi/SCREEN_QUICKSTART.md](hmi/SCREEN_QUICKSTART.md).
+([build sheet](hmi/BUILD_SHEET.md), [preview](hmi/preview.svg))
 
 ### Wiring
 
@@ -32,11 +33,10 @@ card inserted.
 > the manual does not state the screen's logic level. If it idles near 5 V, use
 > a level shifter or divider.
 
-### Check the link before building all three pages
+### Check the link
 
-The manual leaves some behaviour unstated. Make a test project with, on page 0,
-one RealTimeText (`txt_maxl`=12) and one SquareButton (`value1`=1, `value2`=1).
-Flash it, stop the service, and run:
+The manual leaves some behaviour unstated. With the layout on the screen, stop
+the service and run:
 
 ```bash
 HMI_PORT=/dev/serial0 ./target/release/airthra-edge hmi-probe
@@ -75,12 +75,34 @@ HMI_PORT=/dev/serial0 ./target/release/airthra-edge hmi-probe
    sudo install -m 644 edge-rs/deploy/50-airthra-network.rules /etc/polkit-1/rules.d/
    sudo install -m 644 edge-rs/deploy/airthra-edge.service /etc/systemd/system/
    ```
-5. Edit `/etc/airthra-edge.env`, then find wiring faults:
+5. If using TLS, copy the broker's CA certificate to the path in
+   `MQTT_CA_CERT_PATH`:
+   ```bash
+   sudo install -m 644 ca.crt /etc/airthra-edge-ca.crt
+   ```
+   Then edit `/etc/airthra-edge.env` (set `MQTT_HOST`, or nothing is posted),
+   and find wiring faults:
    ```bash
    sudo -u airthra env MAPS_DIR=/opt/airthra-edge/maps SENSORS_FILE=/opt/airthra-edge/sensors.json /opt/airthra-edge/airthra-edge check
    ```
 6. Start: `sudo systemctl enable --now airthra-edge`, logs with
    `journalctl -u airthra-edge -f`.
+
+## The status page
+
+LIVE → STATUS shows what the daemon is doing: whether the broker is connected,
+readings sent, queued and recorded, time since the last send, sensors OK and
+bad, clock state, uptime, and the six most recent events (times in UTC).
+
+| Event | Meaning |
+|---|---|
+| `MQTT_HOST unset: no cloud` | Nothing will be posted until `MQTT_HOST` is set |
+| `cloud: unreachable` | No network route to the broker, or nothing listening |
+| `cloud: TLS failed` | Wrong `ca.crt`, or the broker name is not in its certificate |
+| `cloud: login refused` | Wrong MQTT username or password |
+| `cloud: no ack, resending` | Broker did not confirm a message; it is kept and resent |
+
+A screen loaded before this page existed needs the new `.TFT`.
 
 ## What the screen says when a sensor fails
 
