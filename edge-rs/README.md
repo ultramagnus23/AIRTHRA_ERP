@@ -32,7 +32,7 @@ card inserted.
 > the manual does not state the screen's logic level. If it idles near 5 V, use
 > a level shifter or divider.
 
-### Check the link before building all three pages
+### Check the link before building all four pages
 
 The manual leaves some behaviour unstated. Make a test project with, on page 0,
 one RealTimeText (`txt_maxl`=12) and one SquareButton (`value1`=1, `value2`=1).
@@ -75,12 +75,35 @@ HMI_PORT=/dev/serial0 ./target/release/airthra-edge hmi-probe
    sudo install -m 644 edge-rs/deploy/50-airthra-network.rules /etc/polkit-1/rules.d/
    sudo install -m 644 edge-rs/deploy/airthra-edge.service /etc/systemd/system/
    ```
-5. Edit `/etc/airthra-edge.env`, then find wiring faults:
+5. If using TLS, copy the broker's CA certificate to the path in
+   `MQTT_CA_CERT_PATH`:
+   ```bash
+   sudo install -m 644 ca.crt /etc/airthra-edge-ca.crt
+   ```
+   Then edit `/etc/airthra-edge.env` (set `MQTT_HOST`, or nothing is posted),
+   and find wiring faults:
    ```bash
    sudo -u airthra env MAPS_DIR=/opt/airthra-edge/maps SENSORS_FILE=/opt/airthra-edge/sensors.json /opt/airthra-edge/airthra-edge check
    ```
 6. Start: `sudo systemctl enable --now airthra-edge`, logs with
    `journalctl -u airthra-edge -f`.
+
+## The status page
+
+LIVE → STATUS shows what the daemon is doing: whether the broker is connected,
+readings sent, queued and recorded, time since the last send, sensors OK and
+bad, clock state, uptime, and the six most recent events (times in UTC).
+
+| Event | Meaning |
+|---|---|
+| `MQTT_HOST unset: no cloud` | Nothing will be posted until `MQTT_HOST` is set |
+| `cloud: unreachable` | No network route to the broker, or nothing listening |
+| `cloud: TLS failed` | Wrong `ca.crt`, or the broker name is not in its certificate |
+| `cloud: login refused` | Wrong MQTT username or password |
+| `cloud: no ack, resending` | Broker did not confirm a message; it is kept and resent |
+
+A screen layout built before this page existed needs the `STATUS` button, the
+narrower live-page buttons and page 3 added. Existing widget IDs are unchanged.
 
 ## What the screen says when a sensor fails
 

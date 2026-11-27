@@ -64,6 +64,7 @@ fn poll_loop(
     specs: HashMap<String, SensorSpec>,
     interval: Duration,
     results: Sender<(String, Latest)>,
+    shared: Shared,
 ) {
     let mut history: HashMap<String, VecDeque<u64>> = HashMap::new();
     let mut faults: HashMap<String, &'static str> = HashMap::new();
@@ -87,9 +88,11 @@ fn poll_loop(
             match &latest.fault {
                 Some(f) if faults.insert(id.clone(), f.short) != Some(f.short) => {
                     eprintln!("{}: {id}: {} ({})", poller.name(), f.short, f.detail);
+                    lock(&shared).note(format!("{id} {}", f.short));
                 }
                 None if faults.remove(&id).is_some() => {
-                    eprintln!("{}: {id}: recovered", poller.name())
+                    eprintln!("{}: {id}: recovered", poller.name());
+                    lock(&shared).note(format!("{id} recovered"));
                 }
                 _ => {}
             }
@@ -124,7 +127,19 @@ fn run(config: Config) -> Result<()> {
         .ok()
         .and_then(|s| s.trim().parse().ok())
         .unwrap_or(0);
-    lock(&shared).clock_ok = clock_trusted(OffsetDateTime::now_utc().unix_timestamp(), watermark);
+    {
+        let mut state = lock(&shared);
+        state.clock_ok = clock_trusted(OffsetDateTime::now_utc().unix_timestamp(), watermark);
+        state.cloud_enabled = config.mqtt.is_some();
+        state.started = Some(Instant::now());
+        state.note(format!("started, {} sensors", sensors.len()));
+        if !state.clock_ok {
+            state.note("clock bad: not recording");
+        }
+        if !state.cloud_enabled {
+            state.note("MQTT_HOST unset: no cloud");
+        }
+    }
     eprintln!(
         "airthra-edge: plant {} with {} sensors, {} data",
         config.plant_id,
@@ -162,7 +177,8 @@ fn run(config: Config) -> Result<()> {
     let (results_tx, results) = channel();
     for poller in pollers(&config, &sensors)? {
         let (specs, tx, interval) = (specs.clone(), results_tx.clone(), config.poll_interval);
-        std::thread::spawn(move || poll_loop(poller, specs, interval, tx));
+        let shared = shared.clone();
+        std::thread::spawn(move || poll_loop(poller, specs, interval, tx, shared));
     }
     drop(results_tx);
 
@@ -176,6 +192,13 @@ fn run(config: Config) -> Result<()> {
                 let now = OffsetDateTime::now_utc();
                 let trusted = clock_trusted(now.unix_timestamp(), watermark);
                 let mut state = lock(&shared);
+                if state.clock_ok != trusted {
+                    state.note(if trusted {
+                        "clock ok: recording"
+                    } else {
+                        "clock bad: not recording"
+                    });
+                }
                 state.clock_ok = trusted;
                 if trusted {
                     watermark = watermark.max(now.unix_timestamp());
@@ -195,6 +218,7 @@ fn run(config: Config) -> Result<()> {
         }
         if last_flush.elapsed() >= Duration::from_secs(1) && !batch.is_empty() {
             store.insert(&batch)?;
+            lock(&shared).recorded += batch.len() as u64;
             batch.clear();
             std::fs::write(&watermark_path, watermark.to_string())?;
             if last_prune.is_none_or(|t| t.elapsed() >= Duration::from_secs(3600)) {
@@ -286,10 +310,21 @@ fn probe() -> Result<()> {
 
 fn write_layout(dir: &Path, config: &Config) -> Result<()> {
     let sensors = load_sensors(&config.sensors_file)?;
+    // Sample figures for the preview image only.
     let mut state = State {
         clock_ok: true,
+        cloud_enabled: true,
+        cloud_connected: true,
+        recorded: 1240,
+        published: 1209,
+        unsent: 31,
+        last_publish: Some(Instant::now()),
+        started: Some(Instant::now()),
         ..State::default()
     };
+    state.note(format!("started, {} sensors", sensors.len()));
+    state.note("cloud connected");
+    state.note("PT_05 NO REPLY");
     let mut mock = sensors::Mock::new(sensors.clone());
     for spec in &sensors {
         let mut latest = classify(spec, mock.read(&spec.sensor_id));

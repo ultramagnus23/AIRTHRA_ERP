@@ -5,7 +5,9 @@ use crate::config::Mqtt;
 use crate::model::{lock, rfc3339, Reading, Shared};
 use crate::store::Store;
 use anyhow::{Context, Result};
-use rumqttc::{Client, Event, MqttOptions, Outgoing, Packet, QoS, TlsConfiguration, Transport};
+use rumqttc::{
+    Client, ConnectionError, Event, MqttOptions, Outgoing, Packet, QoS, TlsConfiguration, Transport,
+};
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::{Duration, Instant};
@@ -44,6 +46,17 @@ pub fn message(
     }
 }
 
+/// What the screen shows for a failed connection. The journal gets the detail.
+fn short_reason(error: &ConnectionError) -> &'static str {
+    match error {
+        ConnectionError::Tls(_) => "TLS failed",
+        ConnectionError::ConnectionRefused(_) => "login refused",
+        ConnectionError::Io(e) if e.kind() == std::io::ErrorKind::InvalidData => "TLS failed",
+        ConnectionError::Io(_) | ConnectionError::NetworkTimeout => "unreachable",
+        _ => "link error",
+    }
+}
+
 enum Link {
     Up,
     Down,
@@ -71,6 +84,8 @@ pub fn run(config: Mqtt, plant: String, database: PathBuf, shared: Shared) -> Re
     let (events, link) = channel();
     let status = shared.clone();
     std::thread::spawn(move || {
+        // The last failure reported, so a retry loop logs each reason once.
+        let mut reported = None;
         for event in connection.iter() {
             let update = match event {
                 Ok(Event::Incoming(Packet::ConnAck(_))) => Some(Link::Up),
@@ -78,17 +93,26 @@ pub fn run(config: Mqtt, plant: String, database: PathBuf, shared: Shared) -> Re
                 Ok(Event::Outgoing(Outgoing::Publish(id))) => Some(Link::Sent(id)),
                 Ok(_) => None,
                 Err(e) => {
-                    if lock(&status).cloud_connected {
-                        eprintln!("mqtt: connection lost: {e}");
+                    let reason = short_reason(&e);
+                    {
+                        let mut state = lock(&status);
+                        let was_connected = std::mem::replace(&mut state.cloud_connected, false);
+                        if was_connected || reported != Some(reason) {
+                            eprintln!("mqtt: {reason}: {e}");
+                            state.note(format!("cloud: {reason}"));
+                            reported = Some(reason);
+                        }
                     }
-                    lock(&status).cloud_connected = false;
                     std::thread::sleep(Duration::from_secs(2));
                     Some(Link::Down)
                 }
             };
             if matches!(update, Some(Link::Up)) {
                 eprintln!("mqtt: connected");
-                lock(&status).cloud_connected = true;
+                reported = None;
+                let mut state = lock(&status);
+                state.cloud_connected = true;
+                state.note("cloud connected");
             }
             if let Some(update) = update {
                 if events.send(update).is_err() {
@@ -108,6 +132,7 @@ fn drain(
     shared: Shared,
 ) -> Result<()> {
     let store = Store::open(&database)?;
+    let mut unacknowledged = false;
     loop {
         // Discard anything left over from an earlier attempt.
         while link.try_recv().is_ok() {}
@@ -128,7 +153,17 @@ fn drain(
             continue;
         }
         if wait_for_ack(&link) {
-            store.mark_sent(last_id)?;
+            let delivered = store.mark_sent(last_id)?;
+            let left = store.unsent_count()?;
+            let mut state = lock(&shared);
+            state.published += delivered;
+            state.unsent = left;
+            state.last_publish = Some(Instant::now());
+            unacknowledged = false;
+        } else if !unacknowledged {
+            eprintln!("mqtt: no acknowledgement, will resend");
+            lock(&shared).note("cloud: no ack, resending");
+            unacknowledged = true;
         }
         std::thread::sleep(Duration::from_millis(200));
     }

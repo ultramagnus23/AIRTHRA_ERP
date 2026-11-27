@@ -145,6 +145,13 @@ fn live_values_then_wifi_change_entirely_from_the_screen() {
     sim.touch("next");
     sim.wait_for("pageno", "2/4");
 
+    sim.state.note("pH NO REPLY");
+    sim.state.published = 99;
+    sim.touch("to_status");
+    sim.wait_for("s_sent", "99");
+    sim.wait_for("log0_1", "NO REPLY");
+    sim.touch("status_back");
+
     sim.touch("to_wifi");
     sim.touch("scan");
     sim.wait_for("ssid0", "Plant-Floor");

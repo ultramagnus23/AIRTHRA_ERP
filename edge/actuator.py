@@ -79,7 +79,7 @@ async def set_relay(bus: str, coil: int, state: bool, baud: int = 9600, timeout:
             logger.error("actuator: could not connect to relay module on %s", bus)
             return False
         result = await asyncio.wait_for(
-            client.write_coil(coil, state, slave=RELAY_SLAVE_ID), timeout=timeout
+            client.write_coil(coil, state, device_id=RELAY_SLAVE_ID), timeout=timeout
         )
         if result.isError():
             logger.error("actuator: write_coil(%d, %s) rejected by relay module: %s", coil, state, result)

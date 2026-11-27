@@ -135,6 +135,9 @@ jobs:
           python workers/kpi_worker.py --once
           python workers/alarm_engine.py --once
 
+      - name: Ingest acknowledges only stored messages
+        run: python tests/ingest_delivery_gate.py
+
       - name: Clock gate rejects a bad clock
         # Guards the edge daemon's most dangerous failure mode (a Pi with
         # no RTC booting to 1970 and overwriting history) against
@@ -156,6 +159,20 @@ jobs:
           assert g.check(now - timedelta(seconds=30)).ok, "small NTP slew must be tolerated"
           print("clock gate: all assertions passed")
           PY
+
+  edge-rust:
+    name: Rust edge daemon (format, lint, test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: edge-rs
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup component add rustfmt clippy
+      - run: cargo fmt --check
+      # Linux also compiles the SPI code that a Windows dev machine skips.
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
 
   security:
     name: Dependency audit

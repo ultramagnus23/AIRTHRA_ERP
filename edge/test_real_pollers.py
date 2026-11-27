@@ -98,7 +98,7 @@ async def _ping_slave_on_bus(bus: str, slave_id: int, timeout: float) -> str:
         if not connected:
             return "no response"
         result = await asyncio.wait_for(
-            client.read_holding_registers(0, count=1, slave=slave_id), timeout=timeout
+            client.read_holding_registers(0, count=1, device_id=slave_id), timeout=timeout
         )
         if result.isError():
             # A real Modbus exception response (e.g. illegal data address)
